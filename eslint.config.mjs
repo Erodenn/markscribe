@@ -171,7 +171,7 @@ export default tseslint.config(
 
   // === Ignore patterns ===
   {
-    ignores: ["dist/", "build/", "node_modules/", "coverage/", "*.config.{js,mjs,cjs,ts}"],
+    ignores: ["dist/", "build/", "node_modules/", "coverage/", "docs/", "*.config.{js,mjs,cjs,ts}"],
   },
 
   // ARCHITECTURAL CONSTRAINTS (unencodable — enforce via code review / CLAUDE.md)
