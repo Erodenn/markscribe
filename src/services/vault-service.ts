@@ -1,0 +1,307 @@
+import fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import path from "node:path";
+import matter from "gray-matter";
+import type {
+  VaultService,
+  PathFilter,
+  ParsedNote,
+  WriteMode,
+  MoveResult,
+  DirectoryListing,
+  DirectoryEntry,
+  BatchResult,
+  VaultStats,
+} from "../types.js";
+import { createChildLog } from "../vaultscribe-log.js";
+
+const log = createChildLog({ service: "VaultService" });
+
+const MAX_BATCH_READ = 10;
+const RECENT_FILES_COUNT = 10;
+
+export class VaultServiceImpl implements VaultService {
+  readonly vaultPath: string;
+  private readonly pathFilter: PathFilter;
+
+  constructor(vaultPath: string, pathFilter: PathFilter) {
+    this.vaultPath = path.resolve(vaultPath);
+    this.pathFilter = pathFilter;
+    log.info({ vaultPath: this.vaultPath }, "VaultService initialized");
+  }
+
+  // =========================================================================
+  // Public API (implements VaultService)
+  // =========================================================================
+
+  /**
+   * Resolve a vault-relative path to an absolute path.
+   * Throws if the resolved path escapes the vault root or is blocked by PathFilter.
+   */
+  resolvePath(relativePath: string): string {
+    const absolute = path.resolve(this.vaultPath, relativePath);
+
+    const relative = path.relative(this.vaultPath, absolute);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`Path traversal detected: "${relativePath}" escapes vault root`);
+    }
+
+    const normalizedRelative = relative.replace(/\\/g, "/");
+    if (!this.pathFilter.isAllowed(normalizedRelative)) {
+      throw new Error(`Path not allowed: "${relativePath}"`);
+    }
+
+    log.debug({ relativePath, absolute }, "resolvePath");
+    return absolute;
+  }
+
+  /**
+   * Write content to a file atomically: write to a temp file, then rename.
+   * This ensures the target is never partially written on crash.
+   */
+  async atomicWrite(fullPath: string, content: string): Promise<void> {
+    const dir = path.dirname(fullPath);
+    await fs.mkdir(dir, { recursive: true });
+
+    const tmpPath = path.join(dir, `.vaultscribe-tmp-${Date.now()}-${process.pid}`);
+    try {
+      await fs.writeFile(tmpPath, content, "utf-8");
+      await fs.rename(tmpPath, fullPath);
+      log.debug({ fullPath }, "atomicWrite complete");
+    } catch (err) {
+      await fs.unlink(tmpPath).catch(() => undefined);
+      throw err;
+    }
+  }
+
+  async readNote(relativePath: string): Promise<ParsedNote> {
+    const fullPath = this.resolvePath(relativePath);
+    log.info({ path: relativePath }, "readNote");
+
+    const raw = await fs.readFile(fullPath, "utf-8");
+    const parsed = matter(raw);
+
+    return {
+      path: relativePath,
+      frontmatter: parsed.data as Record<string, unknown>,
+      content: parsed.content,
+      raw,
+    };
+  }
+
+  async writeNote(
+    relativePath: string,
+    content: string,
+    frontmatter?: Record<string, unknown>,
+    mode: WriteMode = "overwrite",
+  ): Promise<void> {
+    log.info({ path: relativePath, mode }, "writeNote");
+
+    const newRaw = frontmatter
+      ? matter.stringify(content, frontmatter as matter.GrayMatterFile<string>["data"])
+      : content;
+
+    if (mode === "overwrite") {
+      const fullPath = this.resolvePath(relativePath);
+      await this.atomicWrite(fullPath, newRaw);
+      return;
+    }
+
+    // For append/prepend, read existing content first (file may not exist yet)
+    let existingRaw = "";
+    try {
+      const fullPath = this.resolvePath(relativePath);
+      existingRaw = await fs.readFile(fullPath, "utf-8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw err;
+      }
+    }
+
+    const combined =
+      mode === "append"
+        ? existingRaw
+          ? existingRaw + "\n" + newRaw
+          : newRaw
+        : existingRaw
+          ? newRaw + "\n" + existingRaw
+          : newRaw;
+
+    const fullPath = this.resolvePath(relativePath);
+    await this.atomicWrite(fullPath, combined);
+  }
+
+  async patchNote(
+    relativePath: string,
+    oldString: string,
+    newString: string,
+    replaceAll = false,
+  ): Promise<void> {
+    log.info({ path: relativePath, replaceAll }, "patchNote");
+
+    const fullPath = this.resolvePath(relativePath);
+    const raw = await fs.readFile(fullPath, "utf-8");
+
+    if (!raw.includes(oldString)) {
+      throw new Error(`patchNote: string not found in "${relativePath}"`);
+    }
+
+    const patched = replaceAll ? raw.split(oldString).join(newString) : raw.replace(oldString, newString);
+    await this.atomicWrite(fullPath, patched);
+  }
+
+  async deleteNote(relativePath: string, confirmPath: string): Promise<void> {
+    log.info({ path: relativePath }, "deleteNote");
+
+    if (relativePath !== confirmPath) {
+      throw new Error(
+        `deleteNote: confirmPath "${confirmPath}" does not match path "${relativePath}"`,
+      );
+    }
+
+    const fullPath = this.resolvePath(relativePath);
+    await fs.unlink(fullPath);
+  }
+
+  async moveNote(oldRelativePath: string, newRelativePath: string): Promise<MoveResult> {
+    log.info({ oldPath: oldRelativePath, newPath: newRelativePath }, "moveNote");
+
+    const oldFull = this.resolvePath(oldRelativePath);
+    const newFull = this.resolvePath(newRelativePath);
+
+    await fs.mkdir(path.dirname(newFull), { recursive: true });
+
+    const content = await fs.readFile(oldFull, "utf-8");
+    await this.atomicWrite(newFull, content);
+    await fs.unlink(oldFull);
+
+    return { oldPath: oldRelativePath, newPath: newRelativePath };
+  }
+
+  async listDirectory(relativePath: string): Promise<DirectoryListing> {
+    log.info({ path: relativePath }, "listDirectory");
+
+    const fullPath =
+      relativePath === "" || relativePath === "."
+        ? this.vaultPath
+        : this.resolvePathForListing(relativePath);
+
+    const dirents = await fs.readdir(fullPath, { withFileTypes: true });
+    const entries: DirectoryEntry[] = [];
+
+    for (const dirent of dirents) {
+      const entryRelative = relativePath
+        ? `${relativePath}/${dirent.name}`.replace(/^\//, "")
+        : dirent.name;
+
+      const isDirectory = dirent.isDirectory();
+
+      if (isDirectory) {
+        if (!this.pathFilter.isAllowedForListing(entryRelative)) continue;
+      } else {
+        if (!this.pathFilter.isAllowed(entryRelative)) continue;
+      }
+
+      entries.push({
+        name: dirent.name,
+        type: isDirectory ? "directory" : "file",
+        path: entryRelative,
+      });
+    }
+
+    return { path: relativePath, entries };
+  }
+
+  async readMultipleNotes(paths: string[]): Promise<BatchResult> {
+    log.info({ count: paths.length }, "readMultipleNotes");
+
+    if (paths.length > MAX_BATCH_READ) {
+      throw new Error(`readMultipleNotes: max ${MAX_BATCH_READ} paths, got ${paths.length}`);
+    }
+
+    const results = await Promise.all(
+      paths.map(async (p) => {
+        try {
+          const note = await this.readNote(p);
+          return { path: p, note };
+        } catch (err) {
+          return {
+            path: p,
+            note: null,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+
+    return { results };
+  }
+
+  async getVaultStats(): Promise<VaultStats> {
+    log.info("getVaultStats");
+
+    const allFiles: Array<{ path: string; size: number; mtime: Date }> = [];
+
+    const walk = async (dir: string, relDir: string): Promise<void> => {
+      let dirents: Dirent[];
+      try {
+        dirents = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const dirent of dirents) {
+        const relPath = relDir ? `${relDir}/${dirent.name}` : dirent.name;
+
+        if (dirent.isDirectory()) {
+          if (!this.pathFilter.isAllowedForListing(relPath)) continue;
+          await walk(path.join(dir, dirent.name), relPath);
+        } else if (dirent.isFile()) {
+          if (!this.pathFilter.isAllowed(relPath)) continue;
+          try {
+            const stat = await fs.stat(path.join(dir, dirent.name));
+            allFiles.push({ path: relPath, size: stat.size, mtime: stat.mtime });
+          } catch {
+            // Skip unreadable files
+          }
+        }
+      }
+    };
+
+    await walk(this.vaultPath, "");
+
+    const noteCount = allFiles.length;
+    const totalSize = allFiles.reduce((sum, f) => sum + f.size, 0);
+
+    const recentFiles = allFiles
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+      .slice(0, RECENT_FILES_COUNT)
+      .map((f) => ({ path: f.path, modified: f.mtime.toISOString() }));
+
+    log.info({ noteCount, totalSize }, "getVaultStats complete");
+    return { noteCount, totalSize, recentFiles };
+  }
+
+  // =========================================================================
+  // Private helpers
+  // =========================================================================
+
+  /**
+   * Resolve a vault-relative path for directory listing (no extension check).
+   */
+  private resolvePathForListing(relativePath: string): string {
+    const absolute = path.resolve(this.vaultPath, relativePath);
+
+    const relative = path.relative(this.vaultPath, absolute);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`Path traversal detected: "${relativePath}" escapes vault root`);
+    }
+
+    const normalizedRelative = relative.replace(/\\/g, "/");
+    if (!this.pathFilter.isAllowedForListing(normalizedRelative)) {
+      throw new Error(`Path not allowed for listing: "${relativePath}"`);
+    }
+
+    return absolute;
+  }
+}
