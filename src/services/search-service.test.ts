@@ -177,7 +177,10 @@ describe("SearchServiceImpl", () => {
 
     it("does not search body when searchContent=false", async () => {
       await writeFile(tmpDir, "note.md", "The term elephant lives in body content");
-      const results = await search.search("elephant", { searchContent: false, searchFrontmatter: false });
+      const results = await search.search("elephant", {
+        searchContent: false,
+        searchFrontmatter: false,
+      });
       expect(results).toHaveLength(0);
     });
   });
@@ -303,7 +306,11 @@ describe("SearchServiceImpl", () => {
     });
 
     it("matches substring in array field", async () => {
-      await writeFile(tmpDir, "note.md", "---\ntags:\n  - programming\n  - typescript\n---\nContent");
+      await writeFile(
+        tmpDir,
+        "note.md",
+        "---\ntags:\n  - programming\n  - typescript\n---\nContent",
+      );
       const results = await search.searchByFrontmatter("tags", "typescript", "contains");
       expect(results).toHaveLength(1);
     });

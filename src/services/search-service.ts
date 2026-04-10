@@ -77,7 +77,10 @@ export class SearchServiceImpl implements SearchService {
     const searchFrontmatterOpt = options?.searchFrontmatter ?? false;
     const limit = options?.limit;
 
-    log.info({ query, scope, searchContent, searchFrontmatter: searchFrontmatterOpt, limit }, "search");
+    log.info(
+      { query, scope, searchContent, searchFrontmatter: searchFrontmatterOpt, limit },
+      "search",
+    );
 
     const queryTerms = tokenize(query);
     if (queryTerms.length === 0) {
@@ -251,7 +254,10 @@ export class SearchServiceImpl implements SearchService {
       });
     }
 
-    log.info({ field, value, operator, resultCount: results.length }, "searchByFrontmatter complete");
+    log.info(
+      { field, value, operator, resultCount: results.length },
+      "searchByFrontmatter complete",
+    );
     return results;
   }
 

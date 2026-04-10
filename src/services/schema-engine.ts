@@ -115,11 +115,12 @@ export class SchemaEngineImpl implements SchemaEngine {
     let entries: string[];
     try {
       const dirents = await fs.readdir(schemasDir);
-      entries = dirents
-        .filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"))
-        .sort(); // alphabetical for stable tie-breaking
+      entries = dirents.filter((f) => f.endsWith(".yaml") || f.endsWith(".yml")).sort(); // alphabetical for stable tie-breaking
     } catch (err) {
-      log.warn({ schemasDir, err }, "loadSchemas: could not read schemas directory — no schemas loaded");
+      log.warn(
+        { schemasDir, err },
+        "loadSchemas: could not read schemas directory — no schemas loaded",
+      );
       return;
     }
 
@@ -208,7 +209,10 @@ export class SchemaEngineImpl implements SchemaEngine {
     }
 
     const pass = checks.every((c) => c.pass);
-    log.info({ path: notePath, schema: schema.name, pass, checkCount: checks.length }, "lintNote complete");
+    log.info(
+      { path: notePath, schema: schema.name, pass, checkCount: checks.length },
+      "lintNote complete",
+    );
 
     return { path: notePath, pass, schema: schema.name, checks };
   }
@@ -226,9 +230,7 @@ export class SchemaEngineImpl implements SchemaEngine {
     const mdFiles = listing.entries
       .filter((e) => e.type === "file" && e.name.endsWith(".md"))
       .map((e) => e.path);
-    const subDirs = listing.entries
-      .filter((e) => e.type === "directory")
-      .map((e) => e.path);
+    const subDirs = listing.entries.filter((e) => e.type === "directory").map((e) => e.path);
 
     // Classify folder type
     const folderType = this.classifyFolder(folderName, schema, mdFiles, subDirs);
@@ -267,7 +269,11 @@ export class SchemaEngineImpl implements SchemaEngine {
 
     // Structural checks only for packet type
     let structural: Check[] = [];
-    if (folderType === "packet" && schema?.folders?.structural && schema.folders.structural.length > 0) {
+    if (
+      folderType === "packet" &&
+      schema?.folders?.structural &&
+      schema.folders.structural.length > 0
+    ) {
       const { hubPath, hubContent, hubError } = await this.detectHub(mdFiles, folderName, schema);
       structural = await this.checkStructuralRules(
         schema.folders.structural,
@@ -297,9 +303,7 @@ export class SchemaEngineImpl implements SchemaEngine {
   async validateArea(areaPath: string): Promise<AreaValidation> {
     log.info({ path: areaPath }, "validateArea start");
 
-    const schema = this.getSchemaForPath(
-      `${areaPath.replace(/\\/g, "/").replace(/\/$/, "")}/x.md`,
-    );
+    const schema = this.getSchemaForPath(`${areaPath.replace(/\\/g, "/").replace(/\/$/, "")}/x.md`);
 
     const folders: Record<string, FolderValidation> = {};
     const summary = { total: 0, passed: 0, failed: 0, skipped: 0 };
@@ -402,7 +406,11 @@ export class SchemaEngineImpl implements SchemaEngine {
 
     const fields: Record<string, SchemaField> = {};
     for (const [fieldName, fieldRaw] of Object.entries(fieldsRaw)) {
-      fields[fieldName] = this.parseSchemaField(fieldRaw as Record<string, unknown>, fieldName, filename);
+      fields[fieldName] = this.parseSchemaField(
+        fieldRaw as Record<string, unknown>,
+        fieldName,
+        filename,
+      );
     }
 
     // Parse content rules
@@ -437,7 +445,9 @@ export class SchemaEngineImpl implements SchemaEngine {
   ): SchemaField {
     const validTypes = ["string", "list", "number", "boolean"] as const;
     if (!validTypes.includes(raw["type"] as (typeof validTypes)[number])) {
-      throw new Error(`${filename}: field "${fieldName}" has invalid type "${String(raw["type"])}"`);
+      throw new Error(
+        `${filename}: field "${fieldName}" has invalid type "${String(raw["type"])}"`,
+      );
     }
 
     const field: SchemaField = {
@@ -605,7 +615,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       checks.push({
         name: `field_${fieldName}_format`,
         pass: formatOk,
-        detail: formatOk ? "" : `Field "${fieldName}" value "${value}" does not match format "${fieldDef.format}"`,
+        detail: formatOk
+          ? ""
+          : `Field "${fieldName}" value "${value}" does not match format "${fieldDef.format}"`,
       });
     }
 
@@ -632,7 +644,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_minItems`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}" must have at least ${constraint.minItems} items (has ${Array.isArray(list) ? list.length : 0})`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}" must have at least ${constraint.minItems} items (has ${Array.isArray(list) ? list.length : 0})`,
       };
     }
 
@@ -642,7 +656,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_maxItems`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}" must have at most ${constraint.maxItems} items (has ${Array.isArray(list) ? list.length : 0})`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}" must have at most ${constraint.maxItems} items (has ${Array.isArray(list) ? list.length : 0})`,
       };
     }
 
@@ -652,7 +668,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_exactItems`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}" must have exactly ${constraint.exactItems} items (has ${Array.isArray(list) ? list.length : 0})`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}" must have exactly ${constraint.exactItems} items (has ${Array.isArray(list) ? list.length : 0})`,
       };
     }
 
@@ -663,7 +681,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_atLeastOne`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}": at least one item must match "${constraint.atLeastOne.matches}"`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}": at least one item must match "${constraint.atLeastOne.matches}"`,
       };
     }
 
@@ -685,7 +705,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_firstEquals`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}": first item must equal "${expected}" (got "${Array.isArray(list) && list.length > 0 ? String(list[0]) : "(empty list)"})"`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}": first item must equal "${expected}" (got "${Array.isArray(list) && list.length > 0 ? String(list[0]) : "(empty list)"})"`,
       };
     }
 
@@ -694,7 +716,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_enum`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}" value "${String(value)}" is not in allowed values: [${constraint.enum.join(", ")}]`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}" value "${String(value)}" is not in allowed values: [${constraint.enum.join(", ")}]`,
       };
     }
 
@@ -704,7 +728,9 @@ export class SchemaEngineImpl implements SchemaEngine {
       return {
         name: `field_${fieldName}_pattern`,
         pass,
-        detail: pass ? "" : `Field "${fieldName}" value "${String(value)}" does not match pattern "${constraint.pattern}"`,
+        detail: pass
+          ? ""
+          : `Field "${fieldName}" value "${String(value)}" does not match pattern "${constraint.pattern}"`,
       };
     }
 
@@ -753,7 +779,11 @@ export class SchemaEngineImpl implements SchemaEngine {
         const emptyLinkRe = /\[\[\s*(?:[|#][^\]]+)?\s*\]\]/g;
         emptyLinkRe.lastIndex = 0;
         if (emptyLinkRe.test(content)) {
-          return { name: rule.name, pass: false, detail: "Content contains empty wikilink(s) like [[]] or [[|...]]" };
+          return {
+            name: rule.name,
+            pass: false,
+            detail: "Content contains empty wikilink(s) like [[]] or [[|...]]",
+          };
         }
 
         // Check for unterminated [[...  (no closing ]] on the same line)
@@ -763,7 +793,11 @@ export class SchemaEngineImpl implements SchemaEngine {
           const opens = (line.match(/\[\[/g) ?? []).length;
           const closes = (line.match(/\]\]/g) ?? []).length;
           if (opens > closes) {
-            return { name: rule.name, pass: false, detail: `Content contains unterminated wikilink on line: "${line.trim().slice(0, 80)}"` };
+            return {
+              name: rule.name,
+              pass: false,
+              detail: `Content contains unterminated wikilink on line: "${line.trim().slice(0, 80)}"`,
+            };
           }
         }
 
@@ -907,7 +941,11 @@ export class SchemaEngineImpl implements SchemaEngine {
           continue;
         }
         if (!hubPath) {
-          checks.push({ name: rule.name, pass: false, detail: "No hub file found — cannot check hub coverage" });
+          checks.push({
+            name: rule.name,
+            pass: false,
+            detail: "No hub file found — cannot check hub coverage",
+          });
           continue;
         }
 
@@ -966,7 +1004,9 @@ export class SchemaEngineImpl implements SchemaEngine {
         checks.push({
           name: rule.name,
           pass,
-          detail: pass ? "" : `Orphan notes found (not linked from any sibling): ${orphans.join(", ")}`,
+          detail: pass
+            ? ""
+            : `Orphan notes found (not linked from any sibling): ${orphans.join(", ")}`,
         });
       }
     }

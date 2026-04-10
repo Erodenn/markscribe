@@ -164,7 +164,10 @@ export class LinkEngineImpl implements LinkEngine {
         const wikilinkRanges = this.getWikilinkRanges(line);
 
         // Search for plain-text occurrences of the stem
-        const searchRegex = new RegExp(`(?<![\\[|])\\b${this.escapeRegex(targetStem)}\\b(?![\\]|])`, "g");
+        const searchRegex = new RegExp(
+          `(?<![\\[|])\\b${this.escapeRegex(targetStem)}\\b(?![\\]|])`,
+          "g",
+        );
         let match: RegExpExecArray | null;
 
         while ((match = searchRegex.exec(line)) !== null) {

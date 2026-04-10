@@ -10,10 +10,7 @@ import { registerLinkTools } from "./link-tools.js";
 /**
  * Register all tools into the registry.
  */
-export function registerTools(
-  registry: Map<string, ToolHandler>,
-  services: Services,
-): void {
+export function registerTools(registry: Map<string, ToolHandler>, services: Services): void {
   registerNoteTools(registry, services);
   registerVaultTools(registry, services);
   registerFrontmatterTools(registry, services);

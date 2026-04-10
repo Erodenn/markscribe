@@ -164,10 +164,7 @@ function makeFindOrphansTool(services: Services): ToolHandler {
 // Registration
 // ============================================================================
 
-export function registerLinkTools(
-  registry: Map<string, ToolHandler>,
-  services: Services,
-): void {
+export function registerLinkTools(registry: Map<string, ToolHandler>, services: Services): void {
   const tools = [
     makeGetBacklinksTool(services),
     makeFindUnlinkedMentionsTool(services),

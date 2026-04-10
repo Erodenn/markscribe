@@ -28,7 +28,10 @@ function makeGetFrontmatterHandler(services: Services): ToolHandler["handler"] {
 
     try {
       const note = await services.vault.readNote(notePath);
-      toolLog.info({ path: notePath, fieldCount: Object.keys(note.frontmatter).length }, "get_frontmatter complete");
+      toolLog.info(
+        { path: notePath, fieldCount: Object.keys(note.frontmatter).length },
+        "get_frontmatter complete",
+      );
 
       return {
         content: [
@@ -75,7 +78,10 @@ function makeUpdateFrontmatterHandler(services: Services): ToolHandler["handler"
 
     const { path: notePath, fields, merge } = parsed.data;
     const toolLog = createChildLog({ tool: "update_frontmatter", path: notePath });
-    toolLog.info({ notePath, fieldCount: Object.keys(fields).length, merge }, "update_frontmatter called");
+    toolLog.info(
+      { notePath, fieldCount: Object.keys(fields).length, merge },
+      "update_frontmatter called",
+    );
 
     try {
       await services.frontmatter.updateFields(notePath, fields, merge);
@@ -88,11 +94,7 @@ function makeUpdateFrontmatterHandler(services: Services): ToolHandler["handler"
         content: [
           {
             type: "text",
-            text: JSON.stringify(
-              { path: notePath, frontmatter: updatedNote.frontmatter },
-              null,
-              2,
-            ),
+            text: JSON.stringify({ path: notePath, frontmatter: updatedNote.frontmatter }, null, 2),
           },
         ],
       };
@@ -138,7 +140,10 @@ function makeManageTagsHandler(services: Services): ToolHandler["handler"] {
 
     try {
       const result = await services.frontmatter.manageTags(notePath, operation, tags);
-      toolLog.info({ path: notePath, operation, tagCount: result.tags.length }, "manage_tags complete");
+      toolLog.info(
+        { path: notePath, operation, tagCount: result.tags.length },
+        "manage_tags complete",
+      );
 
       return {
         content: [

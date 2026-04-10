@@ -7,7 +7,15 @@ import { VaultServiceImpl } from "../services/vault-service.js";
 import { FrontmatterServiceImpl } from "../services/frontmatter-service.js";
 import { PathFilterImpl } from "../services/path-filter.js";
 import { SchemaEngineImpl } from "../services/schema-engine.js";
-import type { ToolHandler, Services, SchemaEngine, LintResult, NoteTemplate, Schema, SchemaInfo } from "../types.js";
+import type {
+  ToolHandler,
+  Services,
+  SchemaEngine,
+  LintResult,
+  NoteTemplate,
+  Schema,
+  SchemaInfo,
+} from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -380,7 +388,9 @@ describe("create_note tool — mock SchemaEngine for unit isolation", () => {
 
     const mockSchema: SchemaEngine = {
       loadSchemas: vi.fn(),
-      getSchemaForPath: vi.fn().mockReturnValue({ name: "mock-schema" } as Partial<Schema> as Schema),
+      getSchemaForPath: vi
+        .fn()
+        .mockReturnValue({ name: "mock-schema" } as Partial<Schema> as Schema),
       lintNote: vi.fn().mockResolvedValue(mockLintResult),
       validateFolder: vi.fn(),
       validateArea: vi.fn(),

@@ -330,7 +330,10 @@ describe("SchemaEngineImpl.lintNote — field types", () => {
     tmpDir = await makeTempVault();
     ({ schema: svc } = makeServices(tmpDir));
     const schemasDir = path.join(tmpDir, "schemas");
-    await writeSchema(schemasDir, "types.yaml", `
+    await writeSchema(
+      schemasDir,
+      "types.yaml",
+      `
 name: types-schema
 description: Type testing
 scope:
@@ -352,7 +355,8 @@ frontmatter:
       required: true
 content:
   rules: []
-`);
+`,
+    );
     await svc.loadSchemas(schemasDir);
   });
 
@@ -361,14 +365,22 @@ content:
   });
 
   it("passes with all correct field types", async () => {
-    await writeNote(tmpDir, "Types/note.md", "---\nstr_field: hello\nlist_field:\n  - a\nnum_field: 42\nbool_field: true\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Types/note.md",
+      "---\nstr_field: hello\nlist_field:\n  - a\nnum_field: 42\nbool_field: true\n---\nContent",
+    );
     const result = await svc.lintNote("Types/note.md");
     expect(result.pass).toBe(true);
     expect(result.schema).toBe("types-schema");
   });
 
   it("fails when string field contains wrong type", async () => {
-    await writeNote(tmpDir, "Types/note.md", "---\nstr_field:\n  - a\nlist_field:\n  - b\nnum_field: 1\nbool_field: true\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Types/note.md",
+      "---\nstr_field:\n  - a\nlist_field:\n  - b\nnum_field: 1\nbool_field: true\n---\nContent",
+    );
     const result = await svc.lintNote("Types/note.md");
     expect(result.pass).toBe(false);
     const typeCheck = result.checks.find((c) => c.name === "field_str_field_type");
@@ -376,7 +388,11 @@ content:
   });
 
   it("fails when required field is absent", async () => {
-    await writeNote(tmpDir, "Types/note.md", "---\nlist_field:\n  - a\nnum_field: 1\nbool_field: true\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Types/note.md",
+      "---\nlist_field:\n  - a\nnum_field: 1\nbool_field: true\n---\nContent",
+    );
     const result = await svc.lintNote("Types/note.md");
     const reqCheck = result.checks.find((c) => c.name === "field_str_field_required");
     expect(reqCheck?.pass).toBe(false);
@@ -403,7 +419,10 @@ describe("SchemaEngineImpl.lintNote — conditions", () => {
     tmpDir = await makeTempVault();
     ({ schema: svc } = makeServices(tmpDir));
     const schemasDir = path.join(tmpDir, "schemas");
-    await writeSchema(schemasDir, "conditions.yaml", `
+    await writeSchema(
+      schemasDir,
+      "conditions.yaml",
+      `
 name: conditions-schema
 description: Condition testing
 scope:
@@ -430,7 +449,8 @@ frontmatter:
         fieldExists: related
 content:
   rules: []
-`);
+`,
+    );
     await svc.loadSchemas(schemasDir);
   });
 
@@ -493,7 +513,10 @@ describe("SchemaEngineImpl.lintNote — constraints", () => {
     tmpDir = await makeTempVault();
     ({ schema: svc } = makeServices(tmpDir));
     const schemasDir = path.join(tmpDir, "schemas");
-    await writeSchema(schemasDir, "constraints.yaml", `
+    await writeSchema(
+      schemasDir,
+      "constraints.yaml",
+      `
 name: constraints-schema
 description: Constraint testing
 scope:
@@ -536,7 +559,8 @@ frontmatter:
         - pattern: "^[A-Z]{3}-\\\\d{3}$"
 content:
   rules: []
-`);
+`,
+    );
     await svc.loadSchemas(schemasDir);
   });
 
@@ -559,7 +583,11 @@ content:
   });
 
   it("maxItems: fails when list has too many items", async () => {
-    await writeNote(tmpDir, "Con/note.md", "---\nitems:\n  - a\n  - b\n  - c\n  - d\n  - e\n  - f\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Con/note.md",
+      "---\nitems:\n  - a\n  - b\n  - c\n  - d\n  - e\n  - f\n---\nContent",
+    );
     const result = await svc.lintNote("Con/note.md");
     const check = result.checks.find((c) => c.name === "field_items_maxItems");
     expect(check?.pass).toBe(false);
@@ -580,28 +608,44 @@ content:
   });
 
   it("atLeastOne: passes when at least one item matches", async () => {
-    await writeNote(tmpDir, "Con/note.md", "---\nmatched_items:\n  - tag/programming\n  - other\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Con/note.md",
+      "---\nmatched_items:\n  - tag/programming\n  - other\n---\nContent",
+    );
     const result = await svc.lintNote("Con/note.md");
     const check = result.checks.find((c) => c.name === "field_matched_items_atLeastOne");
     expect(check?.pass).toBe(true);
   });
 
   it("atLeastOne: fails when no item matches", async () => {
-    await writeNote(tmpDir, "Con/note.md", "---\nmatched_items:\n  - other\n  - another\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Con/note.md",
+      "---\nmatched_items:\n  - other\n  - another\n---\nContent",
+    );
     const result = await svc.lintNote("Con/note.md");
     const check = result.checks.find((c) => c.name === "field_matched_items_atLeastOne");
     expect(check?.pass).toBe(false);
   });
 
   it("allMatch: passes when all items match", async () => {
-    await writeNote(tmpDir, "Con/note.md", "---\nmatched_items:\n  - alpha\n  - beta\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Con/note.md",
+      "---\nmatched_items:\n  - alpha\n  - beta\n---\nContent",
+    );
     const result = await svc.lintNote("Con/note.md");
     const check = result.checks.find((c) => c.name === "field_matched_items_allMatch");
     expect(check?.pass).toBe(true);
   });
 
   it("allMatch: fails when any item doesn't match", async () => {
-    await writeNote(tmpDir, "Con/note.md", "---\nmatched_items:\n  - alpha\n  - Beta\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Con/note.md",
+      "---\nmatched_items:\n  - alpha\n  - Beta\n---\nContent",
+    );
     const result = await svc.lintNote("Con/note.md");
     const check = result.checks.find((c) => c.name === "field_matched_items_allMatch");
     expect(check?.pass).toBe(false);
@@ -609,7 +653,11 @@ content:
 
   it("firstEquals: passes when first item equals template expansion", async () => {
     // File is at Con/MyNote.md so stem = MyNote
-    await writeNote(tmpDir, "Con/MyNote.md", "---\nfirst_item:\n  - MyNote\n  - other\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Con/MyNote.md",
+      "---\nfirst_item:\n  - MyNote\n  - other\n---\nContent",
+    );
     const result = await svc.lintNote("Con/MyNote.md");
     const check = result.checks.find((c) => c.name === "field_first_item_firstEquals");
     expect(check?.pass).toBe(true);
@@ -687,7 +735,11 @@ describe("SchemaEngineImpl.lintNote — content rules", () => {
   });
 
   it("hasPattern: fails when pattern not found", async () => {
-    await writeNote(tmpDir, "Content/note.md", "Content without any wikilinks here at all more words");
+    await writeNote(
+      tmpDir,
+      "Content/note.md",
+      "Content without any wikilinks here at all more words",
+    );
     const result = await svc.lintNote("Content/note.md");
     const check = result.checks.find((c) => c.name === "has-outgoing-link");
     expect(check?.pass).toBe(false);
@@ -729,14 +781,22 @@ describe("SchemaEngineImpl.lintNote — content rules", () => {
   });
 
   it("noSelfWikilink: also catches self-link with display text", async () => {
-    await writeNote(tmpDir, "Content/MyNote.md", "This is [[MyNote|My Custom Title]] which is a self link");
+    await writeNote(
+      tmpDir,
+      "Content/MyNote.md",
+      "This is [[MyNote|My Custom Title]] which is a self link",
+    );
     const result = await svc.lintNote("Content/MyNote.md");
     const check = result.checks.find((c) => c.name === "no-self-links");
     expect(check?.pass).toBe(false);
   });
 
   it("noMalformedWikilinks: passes with well-formed wikilinks", async () => {
-    await writeNote(tmpDir, "Content/note.md", "Good [[Target]] and [[Target|Display]] links with [[Target#Section]] also");
+    await writeNote(
+      tmpDir,
+      "Content/note.md",
+      "Good [[Target]] and [[Target|Display]] links with [[Target#Section]] also",
+    );
     const result = await svc.lintNote("Content/note.md");
     const check = result.checks.find((c) => c.name === "no-malformed");
     expect(check?.pass).toBe(true);
@@ -783,7 +843,10 @@ describe("SchemaEngineImpl — template variable expansion", () => {
     tmpDir = await makeTempVault();
     ({ schema: svc } = makeServices(tmpDir));
     const schemasDir = path.join(tmpDir, "schemas");
-    await writeSchema(schemasDir, "tmpl.yaml", `
+    await writeSchema(
+      schemasDir,
+      "tmpl.yaml",
+      `
 name: tmpl-schema
 description: Template var testing
 scope:
@@ -798,7 +861,8 @@ frontmatter:
         - firstEquals: "{{stem}}"
 content:
   rules: []
-`);
+`,
+    );
     await svc.loadSchemas(schemasDir);
   });
 
@@ -849,8 +913,16 @@ describe("SchemaEngineImpl.validateFolder — folder classification", () => {
   });
 
   it("classifies packet folder (direct .md files)", async () => {
-    await writeNote(tmpDir, "Knowledge/Topic/_Topic.md", "---\ntags:\n  - hub\n---\nContent [[Child]]");
-    await writeNote(tmpDir, "Knowledge/Topic/Child.md", "---\ntags:\n  - science/topic\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Knowledge/Topic/_Topic.md",
+      "---\ntags:\n  - hub\n---\nContent [[Child]]",
+    );
+    await writeNote(
+      tmpDir,
+      "Knowledge/Topic/Child.md",
+      "---\ntags:\n  - science/topic\n---\nContent",
+    );
     const result = await svc.validateFolder("Knowledge/Topic");
     expect(result.folderType).toBe("packet");
   });
@@ -878,7 +950,10 @@ describe("SchemaEngineImpl.validateFolder — folder classification", () => {
     // Actually _Inbox is excluded from schema scope — test a different scenario
     // Use a schema that has a skip list
     const schemasDir = path.join(tmpDir, "schemas2");
-    await writeSchema(schemasDir, "skip.yaml", `
+    await writeSchema(
+      schemasDir,
+      "skip.yaml",
+      `
 name: skip-schema
 description: Skip test
 scope:
@@ -893,7 +968,8 @@ folders:
     supplemental: []
     skip: ["Archive"]
   structural: []
-`);
+`,
+    );
     const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
     const vault = new VaultServiceImpl(tmpDir, filter);
     const frontmatter = new FrontmatterServiceImpl(vault);
@@ -1073,7 +1149,11 @@ describe("SchemaEngineImpl.validateArea", () => {
   });
 
   it("returns pass: true when all folders pass", async () => {
-    await writeNote(tmpDir, "Notes/folder1/note.md", "---\ntitle: Note 1\ntags:\n  - a\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Notes/folder1/note.md",
+      "---\ntitle: Note 1\ntags:\n  - a\n---\nContent",
+    );
     const result = await svc.validateArea("Notes/folder1");
     expect(result.pass).toBe(true);
     expect(result.summary.total).toBeGreaterThan(0);
@@ -1088,9 +1168,15 @@ describe("SchemaEngineImpl.validateArea", () => {
   });
 
   it("summary counts total, passed, failed correctly", async () => {
-    await writeNote(tmpDir, "Notes/goodfolder/note.md", "---\ntitle: Good\ntags:\n  - a\n---\nContent");
+    await writeNote(
+      tmpDir,
+      "Notes/goodfolder/note.md",
+      "---\ntitle: Good\ntags:\n  - a\n---\nContent",
+    );
     const result = await svc.validateArea("Notes");
-    expect(result.summary.total).toBe(result.summary.passed + result.summary.failed + result.summary.skipped);
+    expect(result.summary.total).toBe(
+      result.summary.passed + result.summary.failed + result.summary.skipped,
+    );
   });
 
   it("area path appears in result", async () => {

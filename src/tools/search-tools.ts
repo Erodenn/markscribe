@@ -9,11 +9,15 @@ const log = createChildLog({ module: "search-tools" });
 // ============================================================================
 
 const searchNotesSchema = z.object({
-  query: z.string().describe("Full-text search query. Supports multiple words; results ranked by BM25."),
+  query: z
+    .string()
+    .describe("Full-text search query. Supports multiple words; results ranked by BM25."),
   scope: z
     .string()
     .optional()
-    .describe("Vault-relative path prefix to restrict the search scope. Omit to search entire vault."),
+    .describe(
+      "Vault-relative path prefix to restrict the search scope. Omit to search entire vault.",
+    ),
   searchContent: z
     .boolean()
     .optional()
@@ -79,10 +83,7 @@ function makeSearchNotesHandler(services: Services): ToolHandler["handler"] {
 // Registration
 // ============================================================================
 
-export function registerSearchTools(
-  registry: Map<string, ToolHandler>,
-  services: Services,
-): void {
+export function registerSearchTools(registry: Map<string, ToolHandler>, services: Services): void {
   log.info("registering search tools");
 
   const searchNotes: ToolHandler = {

@@ -216,9 +216,7 @@ describe("lint_note tool", () => {
     const result = await callTool(registry, "lint_note", { path: "Notes/missing-tags.md" });
     const lint = JSON.parse(result.content[0].text);
 
-    const tagsCheck = lint.checks.find(
-      (c: { name: string }) => c.name === "field_tags_required",
-    );
+    const tagsCheck = lint.checks.find((c: { name: string }) => c.name === "field_tags_required");
     expect(tagsCheck).toBeDefined();
     expect(tagsCheck.pass).toBe(false);
     expect(tagsCheck.detail).toMatch(/tags/i);
@@ -289,8 +287,16 @@ describe("validate_folder tool", () => {
     await writeSchema(schemasDir, "folder.yaml", FOLDER_SCHEMA_YAML);
     await schema.loadSchemas(schemasDir);
 
-    await writeFile(vaultPath, "Projects/sub-a/note.md", "---\nstatus: active\n---\nContent here words.");
-    await writeFile(vaultPath, "Projects/sub-b/note.md", "---\nstatus: active\n---\nContent here words.");
+    await writeFile(
+      vaultPath,
+      "Projects/sub-a/note.md",
+      "---\nstatus: active\n---\nContent here words.",
+    );
+    await writeFile(
+      vaultPath,
+      "Projects/sub-b/note.md",
+      "---\nstatus: active\n---\nContent here words.",
+    );
 
     const result = await callTool(registry, "validate_folder", { path: "Projects" });
     expect(result.isError).toBeFalsy();
@@ -376,11 +382,7 @@ describe("validate_area tool", () => {
       "Projects/proj-pass/note.md",
       "---\nstatus: active\n---\nThis note passes with enough words.",
     );
-    await writeFile(
-      vaultPath,
-      "Projects/proj-fail/bad.md",
-      "# No frontmatter no status",
-    );
+    await writeFile(vaultPath, "Projects/proj-fail/bad.md", "# No frontmatter no status");
 
     const result = await callTool(registry, "validate_area", { path: "Projects" });
     expect(result.isError).toBeFalsy();

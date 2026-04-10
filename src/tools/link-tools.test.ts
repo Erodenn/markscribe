@@ -270,7 +270,9 @@ describe("find_broken_links tool", () => {
 
     const { text, isError } = await callTool(registry, "find_broken_links", {});
     expect(isError).toBeFalsy();
-    const parsed = JSON.parse(text) as { brokenLinks: Array<{ sourcePath: string; link: { target: string } }> };
+    const parsed = JSON.parse(text) as {
+      brokenLinks: Array<{ sourcePath: string; link: { target: string } }>;
+    };
     expect(parsed.brokenLinks).toHaveLength(1);
     expect(parsed.brokenLinks[0].sourcePath).toBe("Source.md");
     expect(parsed.brokenLinks[0].link.target).toBe("Ghost");
@@ -291,7 +293,10 @@ describe("find_broken_links tool", () => {
     await writeFile(tmpDir, "other/Source.md", "[[BrokenInOther]]");
 
     const { text } = await callTool(registry, "find_broken_links", { scope: "folder" });
-    const parsed = JSON.parse(text) as { scope: string; brokenLinks: Array<{ sourcePath: string }> };
+    const parsed = JSON.parse(text) as {
+      scope: string;
+      brokenLinks: Array<{ sourcePath: string }>;
+    };
     expect(parsed.scope).toBe("folder");
     expect(parsed.brokenLinks).toHaveLength(1);
     expect(parsed.brokenLinks[0].sourcePath).toBe("folder/Source.md");

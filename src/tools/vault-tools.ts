@@ -9,7 +9,10 @@ const log = createChildLog({ module: "vault-tools" });
 // ============================================================================
 
 const listDirectorySchema = z.object({
-  path: z.string().default("").describe("Vault-relative directory path. Empty string or omitted = vault root."),
+  path: z
+    .string()
+    .default("")
+    .describe("Vault-relative directory path. Empty string or omitted = vault root."),
 });
 
 function makeListDirectoryHandler(services: Services): ToolHandler["handler"] {
@@ -62,7 +65,10 @@ function makeGetVaultStatsHandler(services: Services): ToolHandler["handler"] {
 
     try {
       const stats = await services.vault.getVaultStats();
-      toolLog.info({ noteCount: stats.noteCount, totalSize: stats.totalSize }, "get_vault_stats complete");
+      toolLog.info(
+        { noteCount: stats.noteCount, totalSize: stats.totalSize },
+        "get_vault_stats complete",
+      );
 
       return {
         content: [
@@ -87,10 +93,7 @@ function makeGetVaultStatsHandler(services: Services): ToolHandler["handler"] {
 // Registration
 // ============================================================================
 
-export function registerVaultTools(
-  registry: Map<string, ToolHandler>,
-  services: Services,
-): void {
+export function registerVaultTools(registry: Map<string, ToolHandler>, services: Services): void {
   log.info("registering vault tools");
 
   const listDirectory: ToolHandler = {

@@ -146,7 +146,9 @@ export class VaultServiceImpl implements VaultService {
       throw new Error(`patchNote: string not found in "${relativePath}"`);
     }
 
-    const patched = replaceAll ? raw.split(oldString).join(newString) : raw.replace(oldString, newString);
+    const patched = replaceAll
+      ? raw.split(oldString).join(newString)
+      : raw.replace(oldString, newString);
     await this.atomicWrite(fullPath, patched);
   }
 

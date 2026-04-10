@@ -76,7 +76,10 @@ function makeWriteNoteTool(services: Services): ToolHandler {
           content: [
             {
               type: "text",
-              text: JSON.stringify({ path, message: `Note ${mode === "overwrite" ? "written" : mode + "ed"} successfully.` }),
+              text: JSON.stringify({
+                path,
+                message: `Note ${mode === "overwrite" ? "written" : mode + "ed"} successfully.`,
+              }),
             },
           ],
         };
@@ -105,8 +108,7 @@ const PatchNoteSchema = z.object({
 function makePatchNoteTool(services: Services): ToolHandler {
   return {
     name: "patch_note",
-    description:
-      "Replace text within a note. Set replaceAll to true to replace every occurrence.",
+    description: "Replace text within a note. Set replaceAll to true to replace every occurrence.",
     inputSchema: PatchNoteSchema,
     async handler(args): Promise<ToolResponse> {
       const { path, oldString, newString, replaceAll } = PatchNoteSchema.parse(args);
@@ -162,8 +164,7 @@ const DeleteNoteSchema = z.object({
 function makeDeleteNoteTool(services: Services): ToolHandler {
   return {
     name: "delete_note",
-    description:
-      "Delete a note. confirmPath must match path exactly as a safety check.",
+    description: "Delete a note. confirmPath must match path exactly as a safety check.",
     inputSchema: DeleteNoteSchema,
     async handler(args): Promise<ToolResponse> {
       const { path, confirmPath } = DeleteNoteSchema.parse(args);
@@ -229,7 +230,10 @@ function makeMoveNoteTool(services: Services): ToolHandler {
         const newStem = path.basename(newPath, path.extname(newPath)).replace(/^_/, "");
 
         const renameResult = await services.links.propagateRename(oldStem, newStem);
-        log.info({ oldPath, newPath, filesUpdated: renameResult.filesUpdated }, "move_note with updateLinks complete");
+        log.info(
+          { oldPath, newPath, filesUpdated: renameResult.filesUpdated },
+          "move_note with updateLinks complete",
+        );
 
         return {
           content: [
@@ -300,10 +304,7 @@ function makeReadMultipleNotesTool(services: Services): ToolHandler {
 // Registration
 // ============================================================================
 
-export function registerNoteTools(
-  registry: Map<string, ToolHandler>,
-  services: Services,
-): void {
+export function registerNoteTools(registry: Map<string, ToolHandler>, services: Services): void {
   const tools = [
     makeReadNoteTool(services),
     makeWriteNoteTool(services),

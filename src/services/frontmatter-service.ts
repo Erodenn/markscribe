@@ -68,11 +68,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
     log.info({ path: notePath, merge }, "updateFields complete");
   }
 
-  async manageTags(
-    notePath: string,
-    operation: TagOperation,
-    tags?: string[],
-  ): Promise<TagResult> {
+  async manageTags(notePath: string, operation: TagOperation, tags?: string[]): Promise<TagResult> {
     log.info({ path: notePath, operation, tagCount: tags?.length }, "manageTags");
 
     const note = await this.vault.readNote(notePath);
@@ -111,9 +107,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
 
     const remainingInline = this.extractInlineTags(newContent);
     const allTags = this.union(newYamlTags, remainingInline);
-    const removed = tagsToRemove.filter(
-      (t) => yamlTags.includes(t) || inlineTags.includes(t),
-    );
+    const removed = tagsToRemove.filter((t) => yamlTags.includes(t) || inlineTags.includes(t));
 
     log.info({ path: notePath, removed }, "manageTags remove complete");
     return { path: notePath, tags: allTags, removed };

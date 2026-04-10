@@ -83,7 +83,11 @@ describe("read_note", () => {
     const result = await call("read_note", { path: "notes/hello.md" });
 
     expect(result.isError).toBeFalsy();
-    const data = parseText(result) as { path: string; frontmatter: Record<string, unknown>; content: string };
+    const data = parseText(result) as {
+      path: string;
+      frontmatter: Record<string, unknown>;
+      content: string;
+    };
     expect(data.path).toBe("notes/hello.md");
     expect(data.frontmatter.title).toBe("Hello");
     expect(data.content.trim()).toBe("Body text");
@@ -493,7 +497,9 @@ describe("read_multiple_notes", () => {
     const result = await call("read_multiple_notes", { paths: ["a.md", "b.md"] });
 
     expect(result.isError).toBeFalsy();
-    const data = parseText(result) as { results: Array<{ path: string; note: unknown; error?: string }> };
+    const data = parseText(result) as {
+      results: Array<{ path: string; note: unknown; error?: string }>;
+    };
     expect(data.results).toHaveLength(2);
     expect(data.results[0].note).not.toBeNull();
     expect(data.results[1].note).not.toBeNull();
@@ -507,7 +513,9 @@ describe("read_multiple_notes", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    const data = parseText(result) as { results: Array<{ path: string; note: unknown; error?: string }> };
+    const data = parseText(result) as {
+      results: Array<{ path: string; note: unknown; error?: string }>;
+    };
     expect(data.results).toHaveLength(2);
 
     const found = data.results.find((r) => r.path === "exists.md");

@@ -1,8 +1,17 @@
-import { z } from "zod";
+/**
+ * VaultScribe Type Contracts
+ * ==========================
+ * Reference document for team harness workers.
+ * Workers use these interfaces to build `src/types.ts`.
+ *
+ * This file is NOT imported by source code — it's a specification artifact.
+ */
 
 // ============================================================================
 // Tool Infrastructure
 // ============================================================================
+
+import { z } from "zod";
 
 /**
  * Shape of a registered MCP tool handler.

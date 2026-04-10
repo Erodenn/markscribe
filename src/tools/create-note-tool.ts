@@ -33,7 +33,12 @@ function makeCreateNoteHandler(services: Services): ToolHandler["handler"] {
       };
     }
 
-    const { path: notePath, content, frontmatter: fmOverrides, schema: explicitSchema } = parsed.data;
+    const {
+      path: notePath,
+      content,
+      frontmatter: fmOverrides,
+      schema: explicitSchema,
+    } = parsed.data;
     const toolLog = createChildLog({ tool: "create_note", path: notePath });
     toolLog.info({ notePath, explicitSchema }, "create_note called");
 
@@ -100,7 +105,10 @@ function makeCreateNoteHandler(services: Services): ToolHandler["handler"] {
       const template = services.schema.getTemplate(resolvedSchemaName);
       finalFrontmatter = { ...template.frontmatter, ...(fmOverrides ?? {}) };
       toolLog.debug(
-        { templateKeys: Object.keys(template.frontmatter), overrideKeys: Object.keys(fmOverrides ?? {}) },
+        {
+          templateKeys: Object.keys(template.frontmatter),
+          overrideKeys: Object.keys(fmOverrides ?? {}),
+        },
         "create_note: template merged with overrides",
       );
     } else {
@@ -128,7 +136,11 @@ function makeCreateNoteHandler(services: Services): ToolHandler["handler"] {
       try {
         lintResult = await services.schema.lintNote(notePath);
         toolLog.info(
-          { schema: resolvedSchemaName, pass: lintResult.pass, checkCount: lintResult.checks.length },
+          {
+            schema: resolvedSchemaName,
+            pass: lintResult.pass,
+            checkCount: lintResult.checks.length,
+          },
           "create_note: lint complete",
         );
       } catch (err) {
@@ -153,7 +165,11 @@ function makeCreateNoteHandler(services: Services): ToolHandler["handler"] {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ path: notePath, frontmatter: writtenFrontmatter, lintResult }, null, 2),
+          text: JSON.stringify(
+            { path: notePath, frontmatter: writtenFrontmatter, lintResult },
+            null,
+            2,
+          ),
         },
       ],
     } as ToolResponse;

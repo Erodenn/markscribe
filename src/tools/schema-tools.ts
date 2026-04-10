@@ -28,7 +28,10 @@ function makeLintNoteHandler(services: Services): ToolHandler["handler"] {
 
     try {
       const result = await services.schema.lintNote(notePath);
-      toolLog.info({ schema: result.schema, pass: result.pass, checkCount: result.checks.length }, "lint_note complete");
+      toolLog.info(
+        { schema: result.schema, pass: result.pass, checkCount: result.checks.length },
+        "lint_note complete",
+      );
 
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -163,10 +166,7 @@ function makeListSchemasHandler(services: Services): ToolHandler["handler"] {
 // Registration
 // ============================================================================
 
-export function registerSchemaTools(
-  registry: Map<string, ToolHandler>,
-  services: Services,
-): void {
+export function registerSchemaTools(registry: Map<string, ToolHandler>, services: Services): void {
   log.info("registering schema tools");
 
   const lintNote: ToolHandler = {
