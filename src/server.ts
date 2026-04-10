@@ -1,3 +1,5 @@
+import path from "node:path";
+import fs from "node:fs/promises";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -6,15 +8,20 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { vaultscribeLog } from "./vaultscribe-log.js";
-import type { ToolHandler, Services } from "./types.js";
+import type { ToolHandler, Services, PathFilterConfig } from "./types.js";
 import { registerTools } from "./tools/index.js";
+import { PathFilterImpl } from "./services/path-filter.js";
+import { VaultServiceImpl } from "./services/vault-service.js";
+import { FrontmatterServiceImpl } from "./services/frontmatter-service.js";
+import { SearchServiceImpl } from "./services/search-service.js";
+import { SchemaEngineImpl } from "./services/schema-engine.js";
+import { LinkEngineImpl } from "./services/link-engine.js";
 
 const SERVER_NAME = "vaultscribe";
 const SERVER_VERSION = "0.1.0";
 
 /**
  * Build the tool registry and wire MCP request handlers.
- * services is partial here (Phase 0 has no real services yet).
  */
 function buildRegistry(services: Services): Map<string, ToolHandler> {
   const registry = new Map<string, ToolHandler>();
@@ -35,9 +42,29 @@ export async function startServer(): Promise<void> {
 
   vaultscribeLog.info({ vaultPath }, "starting vaultscribe server");
 
-  // Services are injected in later phases. Cast to satisfy the type — the
-  // registry is empty in Phase 0 so no handler will dereference these.
-  const services = {} as Services;
+  // Build services with dependency injection
+  const pathFilterConfig: PathFilterConfig = {
+    blockedPaths: [],
+    allowedExtensions: [".md", ".markdown", ".txt"],
+  };
+  const pathFilter = new PathFilterImpl(pathFilterConfig);
+  const vault = new VaultServiceImpl(vaultPath, pathFilter);
+  const frontmatter = new FrontmatterServiceImpl(vault);
+  const search = new SearchServiceImpl(vault, frontmatter);
+  const schema = new SchemaEngineImpl(vault, frontmatter);
+  const links = new LinkEngineImpl(vault);
+
+  // Load schemas from .vaultscribe/schemas/ if the directory exists
+  const schemasDir = path.join(vaultPath, ".vaultscribe", "schemas");
+  try {
+    await fs.access(schemasDir);
+    await schema.loadSchemas(schemasDir);
+    vaultscribeLog.info({ schemasDir }, "schemas loaded");
+  } catch {
+    vaultscribeLog.debug({ schemasDir }, "schemas directory not found, skipping");
+  }
+
+  const services: Services = { vault, frontmatter, search, schema, links };
   const registry = buildRegistry(services);
 
   const server = new Server(
