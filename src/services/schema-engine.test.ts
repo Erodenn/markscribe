@@ -1312,3 +1312,218 @@ describe("SchemaEngineImpl.listSchemas", () => {
     expect(info.scope.exclude).toEqual([]);
   });
 });
+
+// =============================================================================
+// Schema parse validation (Zod)
+// =============================================================================
+
+describe("schema parse validation", () => {
+  let tmpDir: string;
+  let svc: SchemaEngineImpl;
+
+  beforeEach(async () => {
+    tmpDir = await makeTempVault();
+    ({ schema: svc } = makeServices(tmpDir));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function loadBadSchema(yamlContent: string): Promise<void> {
+    const schemasDir = path.join(tmpDir, "schemas");
+    await writeSchema(schemasDir, "bad.yaml", yamlContent);
+    await svc.loadSchemas(schemasDir);
+  }
+
+  it("rejects schema with missing name field", async () => {
+    await loadBadSchema(`
+description: No name
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields: {}
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with empty name", async () => {
+    await loadBadSchema(`
+name: ""
+description: Empty name
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields: {}
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with missing scope.paths", async () => {
+    await loadBadSchema(`
+name: bad
+description: No paths
+scope:
+  exclude: []
+frontmatter:
+  fields: {}
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with scope.paths as string instead of array", async () => {
+    await loadBadSchema(`
+name: bad
+description: String paths
+scope:
+  paths: "Notes/"
+frontmatter:
+  fields: {}
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with invalid field type", async () => {
+    await loadBadSchema(`
+name: bad
+description: Bad field type
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields:
+    created:
+      type: date
+      required: true
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with malformed when condition", async () => {
+    await loadBadSchema(`
+name: bad
+description: Bad when
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields:
+    title:
+      type: string
+      required: true
+      when:
+        unknownKey: foo
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with malformed constraint", async () => {
+    await loadBadSchema(`
+name: bad
+description: Bad constraint
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields:
+    tags:
+      type: list
+      required: true
+      constraints:
+        - unknownRule: 5
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with malformed hub detection rule", async () => {
+    await loadBadSchema(`
+name: bad
+description: Bad hub detection
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields: {}
+content:
+  rules: []
+folders:
+  hub:
+    detection:
+      - badKey: value
+    required: true
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with invalid structural check", async () => {
+    await loadBadSchema(`
+name: bad
+description: Bad structural
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields: {}
+content:
+  rules: []
+folders:
+  structural:
+    - check: invalidCheck
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with non-string element in scope.paths", async () => {
+    await loadBadSchema(`
+name: bad
+description: Non-string path
+scope:
+  paths: [123]
+frontmatter:
+  fields: {}
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("rejects schema with fieldEquals missing value sub-field", async () => {
+    await loadBadSchema(`
+name: bad
+description: Bad fieldEquals
+scope:
+  paths: ["Notes/"]
+frontmatter:
+  fields:
+    title:
+      type: string
+      required: true
+      when:
+        fieldEquals:
+          field: status
+content:
+  rules: []
+`);
+    expect(svc.listSchemas()).toHaveLength(0);
+  });
+
+  it("still loads valid PACKET_SCHEMA_YAML correctly", async () => {
+    const schemasDir = path.join(tmpDir, "schemas");
+    await writeSchema(schemasDir, "packet.yaml", PACKET_SCHEMA_YAML);
+    await svc.loadSchemas(schemasDir);
+    const schemas = svc.listSchemas();
+    expect(schemas).toHaveLength(1);
+    expect(schemas[0].name).toBe("knowledge-packet");
+    expect(schemas[0].hasFolderConfig).toBe(true);
+    expect(schemas[0].fieldCount).toBe(3);
+  });
+});

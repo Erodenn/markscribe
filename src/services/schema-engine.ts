@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import yaml from "js-yaml";
+import { z } from "zod";
 import type {
   SchemaEngine,
   Schema,
@@ -26,6 +27,89 @@ import type {
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
 import { escapeRegex } from "../utils.js";
+
+// ============================================================================
+// Zod schemas for YAML validation
+// ============================================================================
+
+const ZodSchemaCondition = z.union([
+  z.object({ tagPresent: z.string() }).strict(),
+  z.object({ fieldEquals: z.object({ field: z.string(), value: z.string() }).strict() }).strict(),
+  z.object({ fieldExists: z.string() }).strict(),
+]);
+
+const ZodSchemaConstraint = z.union([
+  z.object({ minItems: z.number() }).strict(),
+  z.object({ maxItems: z.number() }).strict(),
+  z.object({ exactItems: z.number() }).strict(),
+  z.object({ atLeastOne: z.object({ matches: z.string() }).strict() }).strict(),
+  z.object({ allMatch: z.string() }).strict(),
+  z.object({ firstEquals: z.string() }).strict(),
+  z.object({ enum: z.array(z.union([z.string(), z.number()])) }).strict(),
+  z.object({ pattern: z.string() }).strict(),
+]);
+
+const ZodSchemaField = z.object({
+  type: z.enum(["string", "list", "number", "boolean"]),
+  required: z.boolean().default(false),
+  format: z.string().optional(),
+  default: z.unknown().optional(),
+  when: ZodSchemaCondition.optional(),
+  constraints: z.array(ZodSchemaConstraint).optional(),
+});
+
+const ZodContentRule = z.object({
+  check: z.enum(["hasPattern", "noPattern", "noSelfWikilink", "noMalformedWikilinks", "minWordCount"]),
+  name: z.string().optional(),
+  pattern: z.string().optional(),
+  count: z.number().optional(),
+});
+
+const ZodHubDetectionRule = z.union([
+  z.object({ pattern: z.string() }).strict(),
+  z.object({ fallback: ZodSchemaCondition }).strict(),
+]);
+
+const ZodStructuralRule = z.object({
+  check: z.enum(["hubCoversChildren", "noOrphansInFolder"]),
+  name: z.string().optional(),
+});
+
+const ZodSchemaFolders = z.object({
+  classification: z
+    .object({
+      supplemental: z.array(z.string()).default([]),
+      skip: z.array(z.string()).default([]),
+    })
+    .default({ supplemental: [], skip: [] }),
+  hub: z
+    .object({
+      detection: z.array(ZodHubDetectionRule).default([]),
+      required: z.boolean().default(false),
+    })
+    .optional(),
+  structural: z.array(ZodStructuralRule).optional(),
+});
+
+const ZodSchemaRaw = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  scope: z.object({
+    paths: z.array(z.string()).min(1),
+    exclude: z.array(z.string()).default([]),
+  }),
+  frontmatter: z
+    .object({
+      fields: z.record(z.string(), ZodSchemaField).default({}),
+    })
+    .default({ fields: {} }),
+  content: z
+    .object({
+      rules: z.array(ZodContentRule).default([]),
+    })
+    .default({ rules: [] }),
+  folders: ZodSchemaFolders.optional(),
+});
 
 const log = createChildLog({ service: "SchemaEngine" });
 
@@ -391,164 +475,69 @@ export class SchemaEngineImpl implements SchemaEngine {
   }
 
   private parseSchemaFile(content: string, filename: string): Schema {
-    const raw = yaml.load(content) as Record<string, unknown>;
-
-    if (!raw || typeof raw !== "object") {
-      throw new Error(`${filename}: schema must be a YAML object`);
-    }
-
-    if (typeof raw["name"] !== "string" || !raw["name"]) {
-      throw new Error(`${filename}: schema.name must be a non-empty string`);
-    }
-
-    if (typeof raw["description"] !== "string") {
-      throw new Error(`${filename}: schema.description must be a string`);
-    }
-
-    const scopeRaw = raw["scope"] as Record<string, unknown> | undefined;
-    if (!scopeRaw || !Array.isArray(scopeRaw["paths"])) {
-      throw new Error(`${filename}: schema.scope.paths must be an array`);
+    const rawYaml = yaml.load(content);
+    let parsed: z.infer<typeof ZodSchemaRaw>;
+    try {
+      parsed = ZodSchemaRaw.parse(rawYaml);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        throw new Error(`${filename}: invalid schema — ${err.message}`, { cause: err });
+      }
+      throw err;
     }
 
     const scope: SchemaScope = {
-      paths: scopeRaw["paths"] as string[],
-      exclude: Array.isArray(scopeRaw["exclude"]) ? (scopeRaw["exclude"] as string[]) : [],
+      paths: parsed.scope.paths,
+      exclude: parsed.scope.exclude,
     };
 
-    // Parse frontmatter fields
-    const fmRaw = raw["frontmatter"] as Record<string, unknown> | undefined;
-    const fieldsRaw =
-      fmRaw && typeof fmRaw === "object" && fmRaw["fields"]
-        ? (fmRaw["fields"] as Record<string, unknown>)
-        : {};
-
     const fields: Record<string, SchemaField> = {};
-    for (const [fieldName, fieldRaw] of Object.entries(fieldsRaw)) {
-      fields[fieldName] = this.parseSchemaField(
-        fieldRaw as Record<string, unknown>,
-        fieldName,
-        filename,
-      );
+    for (const [fieldName, fieldRaw] of Object.entries(parsed.frontmatter.fields)) {
+      const field: SchemaField = {
+        type: fieldRaw.type,
+        required: fieldRaw.required,
+      };
+      if (fieldRaw.format !== undefined) field.format = fieldRaw.format;
+      if (fieldRaw.default !== undefined) field.default = fieldRaw.default;
+      if (fieldRaw.when !== undefined) field.when = fieldRaw.when as SchemaCondition;
+      if (fieldRaw.constraints !== undefined)
+        field.constraints = fieldRaw.constraints as SchemaConstraint[];
+      fields[fieldName] = field;
     }
 
-    // Parse content rules
-    const contentRaw = raw["content"] as Record<string, unknown> | undefined;
-    const rulesRaw =
-      contentRaw && Array.isArray(contentRaw["rules"]) ? (contentRaw["rules"] as unknown[]) : [];
+    const rules: ContentRule[] = parsed.content.rules.map((r) => ({
+      name: r.name ?? String(r.check),
+      check: r.check,
+      pattern: r.pattern,
+      count: r.count,
+    }));
 
-    const rules: ContentRule[] = rulesRaw.map((r) =>
-      this.parseContentRule(r as Record<string, unknown>, filename),
-    );
-
-    // Parse folders config (optional)
-    const foldersRaw = raw["folders"] as Record<string, unknown> | undefined;
-    const folders: SchemaFolders | undefined = foldersRaw
-      ? this.parseFoldersConfig(foldersRaw, filename)
-      : undefined;
+    let folders: SchemaFolders | undefined;
+    if (parsed.folders) {
+      const f = parsed.folders;
+      folders = {
+        classification: f.classification,
+        hub: f.hub
+          ? {
+              detection: f.hub.detection as HubDetectionRule[],
+              required: f.hub.required,
+            }
+          : undefined,
+        structural: f.structural?.map((r) => ({
+          name: r.name ?? String(r.check),
+          check: r.check,
+        })),
+      };
+    }
 
     return {
-      name: raw["name"] as string,
-      description: raw["description"] as string,
+      name: parsed.name,
+      description: parsed.description,
       scope,
       frontmatter: { fields },
       content: { rules } as SchemaContent,
       folders,
     };
-  }
-
-  private parseSchemaField(
-    raw: Record<string, unknown>,
-    fieldName: string,
-    filename: string,
-  ): SchemaField {
-    const validTypes = ["string", "list", "number", "boolean"] as const;
-    if (!validTypes.includes(raw["type"] as (typeof validTypes)[number])) {
-      throw new Error(
-        `${filename}: field "${fieldName}" has invalid type "${String(raw["type"])}"`,
-      );
-    }
-
-    const field: SchemaField = {
-      type: raw["type"] as SchemaField["type"],
-      required: raw["required"] === true,
-    };
-
-    if (typeof raw["format"] === "string") {
-      field.format = raw["format"];
-    }
-
-    if (raw["default"] !== undefined) {
-      field.default = raw["default"];
-    }
-
-    if (raw["when"] && typeof raw["when"] === "object") {
-      field.when = raw["when"] as SchemaCondition;
-    }
-
-    if (Array.isArray(raw["constraints"])) {
-      field.constraints = raw["constraints"] as SchemaConstraint[];
-    }
-
-    return field;
-  }
-
-  private parseContentRule(raw: Record<string, unknown>, filename: string): ContentRule {
-    const validChecks = [
-      "hasPattern",
-      "noPattern",
-      "noSelfWikilink",
-      "noMalformedWikilinks",
-      "minWordCount",
-    ] as const;
-
-    if (!validChecks.includes(raw["check"] as (typeof validChecks)[number])) {
-      throw new Error(`${filename}: content rule has invalid check "${String(raw["check"])}"`);
-    }
-
-    return {
-      name: typeof raw["name"] === "string" ? raw["name"] : String(raw["check"]),
-      check: raw["check"] as ContentRule["check"],
-      pattern: typeof raw["pattern"] === "string" ? raw["pattern"] : undefined,
-      count: typeof raw["count"] === "number" ? raw["count"] : undefined,
-    };
-  }
-
-  private parseFoldersConfig(raw: Record<string, unknown>, filename: string): SchemaFolders {
-    const classRaw = raw["classification"] as Record<string, unknown> | undefined;
-    const classification = {
-      supplemental: Array.isArray(classRaw?.["supplemental"])
-        ? (classRaw!["supplemental"] as string[])
-        : [],
-      skip: Array.isArray(classRaw?.["skip"]) ? (classRaw!["skip"] as string[]) : [],
-    };
-
-    const hubRaw = raw["hub"] as Record<string, unknown> | undefined;
-    const hub = hubRaw
-      ? {
-          detection: Array.isArray(hubRaw["detection"])
-            ? (hubRaw["detection"] as HubDetectionRule[])
-            : [],
-          required: hubRaw["required"] === true,
-        }
-      : undefined;
-
-    const validStructuralChecks = ["hubCoversChildren", "noOrphansInFolder"];
-    const structuralRaw = raw["structural"] as Record<string, unknown>[] | undefined;
-    const structural = Array.isArray(structuralRaw)
-      ? structuralRaw.map((r) => {
-          if (!validStructuralChecks.includes(r["check"] as string)) {
-            throw new Error(
-              `${filename}: structural rule has invalid check "${String(r["check"])}"`,
-            );
-          }
-          return {
-            name: typeof r["name"] === "string" ? r["name"] : String(r["check"]),
-            check: r["check"] as StructuralRule["check"],
-          };
-        })
-      : undefined;
-
-    return { classification, hub, structural };
   }
 
   private evalCondition(condition: SchemaCondition, fm: Record<string, unknown>): boolean {
