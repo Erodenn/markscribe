@@ -7,6 +7,7 @@ import type {
   FrontmatterOperator,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
+import { walkVaultFiles } from "../utils.js";
 
 const log = createChildLog({ service: "SearchService" });
 
@@ -291,40 +292,7 @@ export class SearchServiceImpl implements SearchService {
    * Walk the vault and collect all note paths, optionally filtered to a scope prefix.
    */
   private async collectPaths(scope?: string): Promise<string[]> {
-    const paths: string[] = [];
-    await this.walkDir("", scope, paths);
-    return paths;
-  }
-
-  private async walkDir(relDir: string, scope: string | undefined, paths: string[]): Promise<void> {
-    let listing;
-    try {
-      listing = await this.vault.listDirectory(relDir);
-    } catch {
-      return;
-    }
-
-    for (const entry of listing.entries) {
-      if (entry.type === "directory") {
-        if (scope !== undefined) {
-          const dirPrefix = entry.path + "/";
-          // Skip dirs that can't possibly contain scoped paths
-          if (
-            !entry.path.startsWith(scope) &&
-            !scope.startsWith(dirPrefix) &&
-            scope !== entry.path
-          ) {
-            continue;
-          }
-        }
-        await this.walkDir(entry.path, scope, paths);
-      } else {
-        if (scope !== undefined && !entry.path.startsWith(scope)) {
-          continue;
-        }
-        paths.push(entry.path);
-      }
-    }
+    return walkVaultFiles(this.vault, scope);
   }
 
   /** Convert frontmatter object to a flat text string for tokenization. */

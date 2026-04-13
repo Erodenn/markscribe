@@ -10,7 +10,7 @@ import type {
   RenameResult,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
-import { escapeRegex } from "../utils.js";
+import { escapeRegex, walkVaultFiles } from "../utils.js";
 
 const log = createChildLog({ service: "LinkEngine" });
 
@@ -363,35 +363,7 @@ export class LinkEngineImpl implements LinkEngine {
    * Collect all vault file paths (vault-relative), optionally filtered by scope prefix.
    */
   private async collectFiles(scope?: string): Promise<string[]> {
-    const files: string[] = [];
-    await this.walkDirectory("", files);
-
-    if (scope) {
-      const scopePrefix = scope.endsWith("/") ? scope : scope + "/";
-      return files.filter((f) => f.startsWith(scopePrefix) || f === scope);
-    }
-
-    return files;
-  }
-
-  /**
-   * Recursively walk the vault directory and collect all allowed file paths.
-   */
-  private async walkDirectory(relDir: string, acc: string[]): Promise<void> {
-    let listing;
-    try {
-      listing = await this.vault.listDirectory(relDir);
-    } catch {
-      return;
-    }
-
-    for (const entry of listing.entries) {
-      if (entry.type === "directory") {
-        await this.walkDirectory(entry.path, acc);
-      } else {
-        acc.push(entry.path);
-      }
-    }
+    return walkVaultFiles(this.vault, scope);
   }
 
   /**
