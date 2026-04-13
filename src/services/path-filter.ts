@@ -11,7 +11,7 @@ const log = createChildLog({ service: "PathFilter" });
 const IMMUTABLE_BLOCKED_SEGMENTS = [".obsidian", ".git", "node_modules"];
 const IMMUTABLE_BLOCKED_NAMES = [".DS_Store", "Thumbs.db"];
 
-const DEFAULT_ALLOWED_EXTENSIONS = [".md", ".markdown", ".txt"];
+export const DEFAULT_ALLOWED_EXTENSIONS = [".md", ".markdown", ".txt"];
 
 export class PathFilterImpl implements PathFilter {
   private readonly blockedSegments: Set<string>;

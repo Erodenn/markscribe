@@ -25,6 +25,7 @@ import type {
   TemplateContext,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
+import { escapeRegex } from "../utils.js";
 
 const log = createChildLog({ service: "SchemaEngine" });
 
@@ -85,8 +86,19 @@ function getStem(filename: string): string {
   return base.startsWith("_") ? base.slice(1) : base;
 }
 
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// ============================================================================
+// Template context (shared with create-note-tool)
+// ============================================================================
+
+export function buildTemplateContext(notePath: string): TemplateContext {
+  const normalized = notePath.replace(/\\/g, "/");
+  const basename = path.basename(normalized);
+  const filename = path.basename(basename, path.extname(basename));
+  const stem = filename.startsWith("_") ? filename.slice(1) : filename;
+  const folderName = path.basename(path.dirname(normalized));
+  const today = new Date().toISOString().slice(0, 10);
+
+  return { stem, filename, folderName, today };
 }
 
 // ============================================================================
@@ -194,7 +206,7 @@ export class SchemaEngineImpl implements SchemaEngine {
       return { path: notePath, pass: true, schema: null, checks: [] };
     }
 
-    const ctx = this.buildTemplateContext(notePath);
+    const ctx = buildTemplateContext(notePath);
     const checks: Check[] = [];
 
     // Frontmatter field checks
@@ -218,86 +230,8 @@ export class SchemaEngineImpl implements SchemaEngine {
   }
 
   async validateFolder(folderPath: string): Promise<FolderValidation> {
-    log.info({ path: folderPath }, "validateFolder start");
-
     const listing = await this.vault.listDirectory(folderPath);
-    const folderName = path.basename(folderPath) || folderPath;
-
-    // Use a fake note path to resolve the governing schema for this folder
-    const fakeNotePath = `${folderPath.replace(/\\/g, "/").replace(/\/$/, "")}/x.md`;
-    const schema = this.getSchemaForPath(fakeNotePath);
-
-    const mdFiles = listing.entries
-      .filter((e) => e.type === "file" && e.name.endsWith(".md"))
-      .map((e) => e.path);
-    const subDirs = listing.entries.filter((e) => e.type === "directory").map((e) => e.path);
-
-    // Classify folder type
-    const folderType = this.classifyFolder(folderName, schema, mdFiles, subDirs);
-
-    // Skipped folders — return early with no validation
-    if (schema?.folders?.classification.skip.includes(folderName)) {
-      log.info({ path: folderPath, folderType: "unclassified" }, "validateFolder: skip folder");
-      return {
-        path: folderPath,
-        pass: true,
-        folderType: "unclassified",
-        schema: schema?.name ?? null,
-        notes: {},
-        structural: [],
-      };
-    }
-
-    // Supplemental folders — auto-pass
-    if (folderType === "supplemental") {
-      log.info({ path: folderPath, folderType }, "validateFolder: supplemental folder");
-      return {
-        path: folderPath,
-        pass: true,
-        folderType,
-        schema: schema?.name ?? null,
-        notes: {},
-        structural: [],
-      };
-    }
-
-    // Lint each note
-    const notes: Record<string, LintResult> = {};
-    for (const notePath of mdFiles) {
-      notes[notePath] = await this.lintNote(notePath);
-    }
-
-    // Structural checks only for packet type
-    let structural: Check[] = [];
-    if (
-      folderType === "packet" &&
-      schema?.folders?.structural &&
-      schema.folders.structural.length > 0
-    ) {
-      const { hubPath, hubContent, hubError } = await this.detectHub(mdFiles, folderName, schema);
-      structural = await this.checkStructuralRules(
-        schema.folders.structural,
-        hubPath,
-        hubContent,
-        hubError,
-        mdFiles,
-        folderPath,
-      );
-    }
-
-    const notesPassing = Object.values(notes).every((r) => r.pass);
-    const structuralPassing = structural.every((c) => c.pass);
-    const pass = notesPassing && structuralPassing;
-
-    log.info({ path: folderPath, folderType, pass }, "validateFolder complete");
-    return {
-      path: folderPath,
-      pass,
-      folderType,
-      schema: schema?.name ?? null,
-      notes,
-      structural,
-    };
+    return this.validateFolderWithListing(folderPath, listing);
   }
 
   async validateArea(areaPath: string): Promise<AreaValidation> {
@@ -323,7 +257,7 @@ export class SchemaEngineImpl implements SchemaEngine {
     };
   }
 
-  getTemplate(schemaName: string, _noteType?: string): NoteTemplate {
+  getTemplate(schemaName: string): NoteTemplate {
     log.info({ schemaName }, "getTemplate");
 
     const schema = this.schemas.find((s) => s.name === schemaName);
@@ -376,6 +310,85 @@ export class SchemaEngineImpl implements SchemaEngine {
   // ==========================================================================
   // Private helpers
   // ==========================================================================
+
+  private async validateFolderWithListing(
+    folderPath: string,
+    listing: { entries: Array<{ name: string; type: "file" | "directory"; path: string }> },
+  ): Promise<FolderValidation> {
+    log.info({ path: folderPath }, "validateFolder start");
+
+    const folderName = path.basename(folderPath) || folderPath;
+
+    const fakeNotePath = `${folderPath.replace(/\\/g, "/").replace(/\/$/, "")}/x.md`;
+    const schema = this.getSchemaForPath(fakeNotePath);
+
+    const mdFiles = listing.entries
+      .filter((e) => e.type === "file" && e.name.endsWith(".md"))
+      .map((e) => e.path);
+    const subDirs = listing.entries.filter((e) => e.type === "directory").map((e) => e.path);
+
+    const folderType = this.classifyFolder(folderName, schema, mdFiles, subDirs);
+
+    if (schema?.folders?.classification.skip.includes(folderName)) {
+      log.info({ path: folderPath, folderType: "unclassified" }, "validateFolder: skip folder");
+      return {
+        path: folderPath,
+        pass: true,
+        folderType: "unclassified",
+        schema: schema?.name ?? null,
+        notes: {},
+        structural: [],
+      };
+    }
+
+    if (folderType === "supplemental") {
+      log.info({ path: folderPath, folderType }, "validateFolder: supplemental folder");
+      return {
+        path: folderPath,
+        pass: true,
+        folderType,
+        schema: schema?.name ?? null,
+        notes: {},
+        structural: [],
+      };
+    }
+
+    const notes: Record<string, LintResult> = {};
+    for (const notePath of mdFiles) {
+      notes[notePath] = await this.lintNote(notePath);
+    }
+
+    let structural: Check[] = [];
+    if (
+      folderType === "packet" &&
+      schema?.folders?.structural &&
+      schema.folders.structural.length > 0
+    ) {
+      const { hubPath, hubContent, hubError } = await this.detectHub(mdFiles, folderName, schema);
+      structural = await this.checkStructuralRules(
+        schema.folders.structural,
+        hubPath,
+        hubContent,
+        hubError,
+        mdFiles,
+        folderPath,
+      );
+    }
+
+    const notesPassing = Object.values(notes).every((r) => r.pass);
+    const structuralPassing = structural.every((c) => c.pass);
+    const pass = notesPassing && structuralPassing;
+
+    log.info({ path: folderPath, folderType, pass }, "validateFolder complete");
+    return {
+      path: folderPath,
+      pass,
+      folderType,
+      schema: schema?.name ?? null,
+      notes,
+      structural,
+    };
+  }
 
   private parseSchemaFile(content: string, filename: string): Schema {
     const raw = yaml.load(content) as Record<string, unknown>;
@@ -519,16 +532,21 @@ export class SchemaEngineImpl implements SchemaEngine {
         }
       : undefined;
 
+    const validStructuralChecks = ["hubCoversChildren", "noOrphansInFolder"];
     const structuralRaw = raw["structural"] as Record<string, unknown>[] | undefined;
     const structural = Array.isArray(structuralRaw)
-      ? structuralRaw.map((r) => ({
-          name: typeof r["name"] === "string" ? r["name"] : String(r["check"]),
-          check: r["check"] as StructuralRule["check"],
-        }))
+      ? structuralRaw.map((r) => {
+          if (!validStructuralChecks.includes(r["check"] as string)) {
+            throw new Error(
+              `${filename}: structural rule has invalid check "${String(r["check"])}"`,
+            );
+          }
+          return {
+            name: typeof r["name"] === "string" ? r["name"] : String(r["check"]),
+            check: r["check"] as StructuralRule["check"],
+          };
+        })
       : undefined;
-
-    // Suppress unused filename warning
-    void filename;
 
     return { classification, hub, structural };
   }
@@ -829,17 +847,6 @@ export class SchemaEngineImpl implements SchemaEngine {
     }
   }
 
-  private buildTemplateContext(notePath: string): TemplateContext {
-    const normalized = notePath.replace(/\\/g, "/");
-    const basename = path.basename(normalized);
-    const filename = path.basename(basename, path.extname(basename));
-    const stem = filename.startsWith("_") ? filename.slice(1) : filename;
-    const folderName = path.basename(path.dirname(normalized));
-    const today = new Date().toISOString().slice(0, 10);
-
-    return { stem, filename, folderName, today };
-  }
-
   private classifyFolder(
     folderName: string,
     schema: Schema | null,
@@ -1028,19 +1035,25 @@ export class SchemaEngineImpl implements SchemaEngine {
     folders: Record<string, FolderValidation>,
     summary: { total: number; passed: number; failed: number; skipped: number },
   ): Promise<void> {
-    const folderResult = await this.validateFolder(dirPath);
+    let listing;
+    try {
+      listing = await this.vault.listDirectory(dirPath);
+    } catch (err) {
+      log.warn({ dirPath, err }, "walkDirectories: could not list directory");
+      return;
+    }
+
+    const folderResult = await this.validateFolderWithListing(dirPath, listing);
     folders[dirPath] = folderResult;
     summary.total++;
 
     if (folderResult.folderType === "supplemental") {
-      // supplemental folders auto-pass and are counted as skipped per spec
       summary.skipped++;
     } else if (
       folderResult.folderType === "unclassified" &&
       Object.keys(folderResult.notes).length === 0 &&
       folderResult.structural.length === 0
     ) {
-      // Truly skipped (skip-config folder or no schema) — no notes were linted
       summary.skipped++;
     } else if (folderResult.pass) {
       summary.passed++;
@@ -1048,16 +1061,10 @@ export class SchemaEngineImpl implements SchemaEngine {
       summary.failed++;
     }
 
-    // Recurse into subdirectories
-    try {
-      const listing = await this.vault.listDirectory(dirPath);
-      for (const entry of listing.entries) {
-        if (entry.type === "directory") {
-          await this.walkDirectories(entry.path, folders, summary);
-        }
+    for (const entry of listing.entries) {
+      if (entry.type === "directory") {
+        await this.walkDirectories(entry.path, folders, summary);
       }
-    } catch (err) {
-      log.warn({ dirPath, err }, "walkDirectories: could not list directory");
     }
   }
 }

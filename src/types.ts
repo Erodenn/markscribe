@@ -475,7 +475,7 @@ export interface SchemaEngine {
   validateArea(path: string): Promise<AreaValidation>;
 
   /** Get template frontmatter + content for convention-aware creation */
-  getTemplate(schemaName: string, noteType?: string): NoteTemplate;
+  getTemplate(schemaName: string): NoteTemplate;
 
   /** List loaded schemas with summary info */
   listSchemas(): SchemaInfo[];

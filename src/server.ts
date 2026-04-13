@@ -11,7 +11,7 @@ import {
 import { vaultscribeLog } from "./vaultscribe-log.js";
 import type { ToolHandler, Services, PathFilterConfig, VaultScribeConfig } from "./types.js";
 import { registerTools } from "./tools/index.js";
-import { PathFilterImpl } from "./services/path-filter.js";
+import { PathFilterImpl, DEFAULT_ALLOWED_EXTENSIONS } from "./services/path-filter.js";
 import { VaultServiceImpl } from "./services/vault-service.js";
 import { FrontmatterServiceImpl } from "./services/frontmatter-service.js";
 import { SearchServiceImpl } from "./services/search-service.js";
@@ -21,7 +21,6 @@ import { LinkEngineImpl } from "./services/link-engine.js";
 const SERVER_NAME = "vaultscribe";
 const SERVER_VERSION = "0.1.0";
 
-const DEFAULT_ALLOWED_EXTENSIONS = [".md", ".markdown", ".txt"];
 const DEFAULT_SCHEMAS_DIR = "schemas";
 
 /**

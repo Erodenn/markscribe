@@ -1,4 +1,5 @@
 import matter from "gray-matter";
+import { escapeRegex } from "../utils.js";
 import type {
   FrontmatterService,
   VaultService,
@@ -150,7 +151,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
     let result = content;
     for (const tag of tagsToRemove) {
       // Match tag preceded by whitespace or start of line — remove the # and tag name
-      const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedTag = escapeRegex(tag);
       const re = new RegExp(`(^|\\s)#${escapedTag}(?=[\\s]|$)`, "gm");
       result = result.replace(re, (_, prefix: string) => prefix);
     }

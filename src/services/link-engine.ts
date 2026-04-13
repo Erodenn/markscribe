@@ -10,6 +10,7 @@ import type {
   RenameResult,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
+import { escapeRegex } from "../utils.js";
 
 const log = createChildLog({ service: "LinkEngine" });
 
@@ -42,6 +43,7 @@ export class LinkEngineImpl implements LinkEngine {
     const links: WikiLink[] = [];
     const lines = content.split("\n");
     let inCodeBlock = false;
+    const regex = new RegExp(WIKILINK_RE.source, "g");
 
     for (const line of lines) {
       if (CODE_FENCE_RE.test(line.trim())) {
@@ -50,7 +52,7 @@ export class LinkEngineImpl implements LinkEngine {
       }
       if (inCodeBlock) continue;
 
-      const regex = new RegExp(WIKILINK_RE.source, "g");
+      regex.lastIndex = 0;
       let match: RegExpExecArray | null;
 
       while ((match = regex.exec(line)) !== null) {
@@ -109,6 +111,7 @@ export class LinkEngineImpl implements LinkEngine {
 
       const lines = content.split("\n");
       let inCodeBlock = false;
+      const regex = new RegExp(WIKILINK_RE.source, "g");
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -119,7 +122,7 @@ export class LinkEngineImpl implements LinkEngine {
         }
         if (inCodeBlock) continue;
 
-        const regex = new RegExp(WIKILINK_RE.source, "g");
+        regex.lastIndex = 0;
         let match: RegExpExecArray | null;
         while ((match = regex.exec(line)) !== null) {
           const raw = match[0];
@@ -175,7 +178,7 @@ export class LinkEngineImpl implements LinkEngine {
 
         // Search for plain-text occurrences of the stem
         const searchRegex = new RegExp(
-          `(?<![\\[|])\\b${this.escapeRegex(targetStem)}\\b(?![\\]|])`,
+          `(?<![\\[|])\\b${escapeRegex(targetStem)}\\b(?![\\]|])`,
           "g",
         );
         let match: RegExpExecArray | null;
@@ -213,6 +216,7 @@ export class LinkEngineImpl implements LinkEngine {
 
       const lines = content.split("\n");
       let inCodeBlock = false;
+      const regex = new RegExp(WIKILINK_RE.source, "g");
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -223,7 +227,7 @@ export class LinkEngineImpl implements LinkEngine {
         }
         if (inCodeBlock) continue;
 
-        const regex = new RegExp(WIKILINK_RE.source, "g");
+        regex.lastIndex = 0;
         let match: RegExpExecArray | null;
 
         while ((match = regex.exec(line)) !== null) {
@@ -261,20 +265,28 @@ export class LinkEngineImpl implements LinkEngine {
       inDegree.set(f, 0);
     }
 
-    const existingStems = this.buildStemSet(files);
+    // Map each stem to the file paths that share it (for O(1) lookup)
+    const stemToFiles = new Map<string, string[]>();
+    for (const f of files) {
+      const stem = this.stemFromPath(f);
+      const existing = stemToFiles.get(stem);
+      if (existing) {
+        existing.push(f);
+      } else {
+        stemToFiles.set(stem, [f]);
+      }
+    }
 
     for (const filePath of files) {
       const links = await this.getLinksForFile(filePath);
 
       for (const link of links) {
         const stem = this.stemFromTarget(link.target);
-        if (!existingStems.has(stem)) continue;
+        const targets = stemToFiles.get(stem);
+        if (!targets) continue;
 
-        // Find the file(s) matching this stem and increment their in-degree
-        for (const f of files) {
-          if (this.stemFromPath(f) === stem) {
-            inDegree.set(f, (inDegree.get(f) ?? 0) + 1);
-          }
+        for (const f of targets) {
+          inDegree.set(f, (inDegree.get(f) ?? 0) + 1);
         }
       }
     }
@@ -432,12 +444,6 @@ export class LinkEngineImpl implements LinkEngine {
     return basename.trim();
   }
 
-  /**
-   * Escape a string for use in a regex.
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
 
   /**
    * Get all wikilink character ranges in a line (for exclusion in mention search).

@@ -1,8 +1,7 @@
-import path from "node:path";
 import fs from "node:fs/promises";
 import { z } from "zod";
-import type { ToolHandler, Services, ToolResponse, LintResult, TemplateContext } from "../types.js";
-import { expandTemplateVars } from "../services/schema-engine.js";
+import type { ToolHandler, Services, ToolResponse, LintResult } from "../types.js";
+import { expandTemplateVars, buildTemplateContext } from "../services/schema-engine.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "create-note-tool" });
@@ -55,7 +54,6 @@ function makeCreateNoteTool(services: Services): ToolHandler {
       }
       log.info({ notePath, explicitSchema }, "create_note called");
 
-      // Step 1: Check if file already exists
       try {
         const absolutePath = services.vault.resolvePath(notePath);
         await fs.access(absolutePath);
@@ -78,7 +76,6 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         }
       }
 
-      // Step 2: Resolve schema
       let resolvedSchemaName: string | null;
 
       if (explicitSchema !== undefined) {
@@ -102,21 +99,14 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         resolvedSchemaName = matchedSchema?.name ?? null;
       }
 
-      // Step 3: Build final frontmatter with template var expansion
       let finalFrontmatter: Record<string, unknown> | undefined;
 
       if (resolvedSchemaName !== null) {
         const template = services.schema.getTemplate(resolvedSchemaName);
         const merged = { ...template.frontmatter, ...(fmOverrides ?? {}) };
 
-        // Expand template vars in template defaults that were NOT overridden
         const overrideKeys = new Set(Object.keys(fmOverrides ?? {}));
-        const ctx: TemplateContext = {
-          stem: path.basename(notePath, path.extname(notePath)).replace(/^_/, ""),
-          filename: path.basename(notePath, path.extname(notePath)),
-          folderName: path.basename(path.dirname(notePath)) || "",
-          today: new Date().toISOString().slice(0, 10),
-        };
+        const ctx = buildTemplateContext(notePath);
 
         for (const [key, value] of Object.entries(merged)) {
           if (!overrideKeys.has(key) && typeof value === "string") {
@@ -136,7 +126,6 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         finalFrontmatter = fmOverrides;
       }
 
-      // Step 4: Write note
       try {
         await services.vault.writeNote(notePath, content, finalFrontmatter, "overwrite");
         log.info({ notePath }, "create_note: note written");
@@ -148,7 +137,6 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         };
       }
 
-      // Step 5: Lint if schema was applied
       let lintResult: LintResult | null = null;
       if (resolvedSchemaName !== null) {
         try {
@@ -166,7 +154,7 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         }
       }
 
-      // Read back written frontmatter
+      // Read back to capture any YAML round-trip normalization (e.g. date coercion)
       let writtenFrontmatter: Record<string, unknown> = finalFrontmatter ?? {};
       try {
         const note = await services.vault.readNote(notePath);
