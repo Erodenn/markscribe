@@ -34,7 +34,7 @@ const log = createChildLog({ service: "SchemaEngine" });
 
 const TEMPLATE_VAR_RE = /\{\{(stem|filename|folderName|today)\}\}/g;
 
-function expandTemplateVars(template: string, ctx: TemplateContext): string {
+export function expandTemplateVars(template: string, ctx: TemplateContext): string {
   TEMPLATE_VAR_RE.lastIndex = 0;
   return template.replace(TEMPLATE_VAR_RE, (_, key: string) => {
     switch (key) {
@@ -338,19 +338,24 @@ export class SchemaEngineImpl implements SchemaEngine {
       // Skip conditional fields (can't know context at template time)
       if (fieldDef.when) continue;
 
-      switch (fieldDef.type) {
-        case "string":
-          frontmatter[fieldName] = "";
-          break;
-        case "list":
-          frontmatter[fieldName] = [];
-          break;
-        case "number":
-          frontmatter[fieldName] = 0;
-          break;
-        case "boolean":
-          frontmatter[fieldName] = false;
-          break;
+      // Use schema-defined default if available, otherwise type-appropriate zero value
+      if (fieldDef.default !== undefined) {
+        frontmatter[fieldName] = fieldDef.default;
+      } else {
+        switch (fieldDef.type) {
+          case "string":
+            frontmatter[fieldName] = "";
+            break;
+          case "list":
+            frontmatter[fieldName] = [];
+            break;
+          case "number":
+            frontmatter[fieldName] = 0;
+            break;
+          case "boolean":
+            frontmatter[fieldName] = false;
+            break;
+        }
       }
     }
 
@@ -457,6 +462,10 @@ export class SchemaEngineImpl implements SchemaEngine {
 
     if (typeof raw["format"] === "string") {
       field.format = raw["format"];
+    }
+
+    if (raw["default"] !== undefined) {
+      field.default = raw["default"];
     }
 
     if (raw["when"] && typeof raw["when"] === "object") {

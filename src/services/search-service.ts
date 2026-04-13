@@ -12,7 +12,8 @@ const log = createChildLog({ service: "SearchService" });
 
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
-const EXCERPT_CONTEXT_CHARS = 80;
+const DEFAULT_EXCERPT_CHARS = 80;
+const DEFAULT_MAX_RESULTS = 50;
 
 /** Tokenize text into lowercase tokens by splitting on whitespace/punctuation. */
 function tokenize(text: string): string[] {
@@ -35,7 +36,7 @@ function buildTermFreq(tokens: string[]): Map<string, number> {
  * Extract an excerpt from text around the first occurrence of any query term.
  * Returns a snippet of ~EXCERPT_CONTEXT_CHARS on each side of the match.
  */
-function extractExcerpt(text: string, queryTerms: string[]): string {
+function extractExcerpt(text: string, queryTerms: string[], contextChars: number): string {
   const lower = text.toLowerCase();
   let matchIndex = -1;
 
@@ -47,24 +48,40 @@ function extractExcerpt(text: string, queryTerms: string[]): string {
   }
 
   if (matchIndex === -1) {
-    return text.slice(0, EXCERPT_CONTEXT_CHARS * 2).trim();
+    return text.slice(0, contextChars * 2).trim();
   }
 
-  const start = Math.max(0, matchIndex - EXCERPT_CONTEXT_CHARS);
-  const end = Math.min(text.length, matchIndex + EXCERPT_CONTEXT_CHARS);
+  const start = Math.max(0, matchIndex - contextChars);
+  const end = Math.min(text.length, matchIndex + contextChars);
   const excerpt = text.slice(start, end).trim();
 
   return (start > 0 ? "..." : "") + excerpt + (end < text.length ? "..." : "");
 }
 
+export interface SearchServiceConfig {
+  maxResults?: number;
+  excerptChars?: number;
+}
+
 export class SearchServiceImpl implements SearchService {
   private readonly vault: VaultService;
   private readonly frontmatter: FrontmatterService;
+  private readonly maxResults: number;
+  private readonly excerptChars: number;
 
-  constructor(vaultService: VaultService, frontmatterService: FrontmatterService) {
+  constructor(
+    vaultService: VaultService,
+    frontmatterService: FrontmatterService,
+    config?: SearchServiceConfig,
+  ) {
     this.vault = vaultService;
     this.frontmatter = frontmatterService;
-    log.info("SearchService initialized");
+    this.maxResults = config?.maxResults ?? DEFAULT_MAX_RESULTS;
+    this.excerptChars = config?.excerptChars ?? DEFAULT_EXCERPT_CHARS;
+    log.info(
+      { maxResults: this.maxResults, excerptChars: this.excerptChars },
+      "SearchService initialized",
+    );
   }
 
   // =========================================================================
@@ -196,7 +213,11 @@ export class SearchServiceImpl implements SearchService {
       }
 
       const excerptSource = searchContent ? doc.contentText : doc.frontmatterText;
-      const excerpt = extractExcerpt(excerptSource || doc.contentText, queryTerms);
+      const excerpt = extractExcerpt(
+        excerptSource || doc.contentText,
+        queryTerms,
+        this.excerptChars,
+      );
 
       const result: SearchResult = {
         path: doc.path,
@@ -214,7 +235,8 @@ export class SearchServiceImpl implements SearchService {
     // Sort by score descending
     results.sort((a, b) => b.score - a.score);
 
-    const limited = limit !== undefined ? results.slice(0, limit) : results;
+    const effectiveLimit = limit ?? this.maxResults;
+    const limited = results.slice(0, effectiveLimit);
     log.info({ query, resultCount: limited.length }, "search complete");
     return limited;
   }

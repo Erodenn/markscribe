@@ -287,6 +287,30 @@ describe("VaultServiceImpl", () => {
         "Path traversal detected",
       );
     });
+
+    it("throws when destination already exists (default)", async () => {
+      await writeFile(tmpDir, "source.md", "source content");
+      await writeFile(tmpDir, "dest.md", "existing content");
+      await expect(svc.moveNote("source.md", "dest.md")).rejects.toThrow(
+        /destination.*already exists/i,
+      );
+      // Source should still exist — move was not performed
+      const sourceContent = await readFile(tmpDir, "source.md");
+      expect(sourceContent).toBe("source content");
+      // Destination should be unchanged
+      const destContent = await readFile(tmpDir, "dest.md");
+      expect(destContent).toBe("existing content");
+    });
+
+    it("overwrites destination when overwrite=true", async () => {
+      await writeFile(tmpDir, "source.md", "new content");
+      await writeFile(tmpDir, "dest.md", "old content");
+      const result = await svc.moveNote("source.md", "dest.md", true);
+      expect(result.newPath).toBe("dest.md");
+      const content = await readFile(tmpDir, "dest.md");
+      expect(content).toBe("new content");
+      await expect(fs.access(path.join(tmpDir, "source.md"))).rejects.toThrow();
+    });
   });
 
   // =========================================================================

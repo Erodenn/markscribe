@@ -452,3 +452,104 @@ describe("create_note tool — mock SchemaEngine for unit isolation", () => {
     expect(data.lintResult).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Template variable expansion
+// ---------------------------------------------------------------------------
+
+describe("create_note tool — template variable expansion", () => {
+  let tmpDir: string;
+  let schemasDir: string;
+  let registry: Map<string, ToolHandler>;
+
+  beforeEach(async () => {
+    tmpDir = await makeTempVault();
+    schemasDir = path.join(tmpDir, ".vaultscribe", "schemas");
+    await fs.mkdir(schemasDir, { recursive: true });
+
+    const schemaYaml = `
+name: tmpl-test
+description: Schema with template var defaults
+scope:
+  paths:
+    - "Notes/"
+  exclude: []
+frontmatter:
+  fields:
+    title:
+      type: string
+      required: true
+      default: "{{stem}}"
+    created:
+      type: string
+      required: true
+      default: "{{today}}"
+    folder:
+      type: string
+      required: true
+      default: "{{folderName}}"
+    status:
+      type: string
+      required: true
+      default: "draft"
+content:
+  rules: []
+`;
+    await fs.writeFile(path.join(schemasDir, "tmpl.yaml"), schemaYaml, "utf-8");
+
+    const services = makeServices(tmpDir);
+    const schemaEngine = services.schema as SchemaEngineImpl;
+    await schemaEngine.loadSchemas(schemasDir);
+    registry = buildRegistry(services);
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("expands {{stem}} in template defaults", async () => {
+    const result = await callTool(registry, "create_note", {
+      path: "Notes/MyProject.md",
+    });
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.frontmatter.title).toBe("MyProject");
+  });
+
+  it("expands {{today}} in template defaults", async () => {
+    const result = await callTool(registry, "create_note", {
+      path: "Notes/DateTest.md",
+    });
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.frontmatter.created).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("expands {{folderName}} in template defaults", async () => {
+    const result = await callTool(registry, "create_note", {
+      path: "Notes/FolderTest.md",
+    });
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.frontmatter.folder).toBe("Notes");
+  });
+
+  it("does not expand template vars in user-provided overrides", async () => {
+    const result = await callTool(registry, "create_note", {
+      path: "Notes/Override.md",
+      frontmatter: { title: "{{stem}} literal" },
+    });
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.frontmatter.title).toBe("{{stem}} literal");
+  });
+
+  it("preserves non-template defaults as-is", async () => {
+    const result = await callTool(registry, "create_note", {
+      path: "Notes/StaticDefault.md",
+    });
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.frontmatter.status).toBe("draft");
+  });
+});

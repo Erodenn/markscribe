@@ -371,4 +371,45 @@ describe("SearchServiceImpl", () => {
       expect(results[0].score).toBe(1);
     });
   });
+
+  // =========================================================================
+  // Configurable search settings
+  // =========================================================================
+
+  describe("configurable maxResults and excerptChars", () => {
+    it("applies default maxResults cap of 50 when limit is not specified", async () => {
+      // Create 55 notes so we exceed default cap
+      for (let i = 0; i < 55; i++) {
+        await writeFile(tmpDir, `note-${i}.md`, `Common keyword in all notes ${i}`);
+      }
+      const results = await search.search("common keyword");
+      expect(results.length).toBeLessThanOrEqual(50);
+    });
+
+    it("respects custom maxResults from config", async () => {
+      const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
+      const vault = new VaultServiceImpl(tmpDir, filter);
+      const fm = new FrontmatterServiceImpl(vault);
+      const customSearch = new SearchServiceImpl(vault, fm, { maxResults: 3 });
+
+      for (let i = 0; i < 10; i++) {
+        await writeFile(tmpDir, `n-${i}.md`, `Shared term in note ${i}`);
+      }
+      const results = await customSearch.search("shared term");
+      expect(results.length).toBeLessThanOrEqual(3);
+    });
+
+    it("explicit limit overrides maxResults config", async () => {
+      const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
+      const vault = new VaultServiceImpl(tmpDir, filter);
+      const fm = new FrontmatterServiceImpl(vault);
+      const customSearch = new SearchServiceImpl(vault, fm, { maxResults: 100 });
+
+      for (let i = 0; i < 10; i++) {
+        await writeFile(tmpDir, `x-${i}.md`, `Targetword in note ${i}`);
+      }
+      const results = await customSearch.search("targetword", { limit: 2 });
+      expect(results.length).toBeLessThanOrEqual(2);
+    });
+  });
 });

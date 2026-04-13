@@ -8,47 +8,36 @@ const log = createChildLog({ module: "vault-tools" });
 // list_directory
 // ============================================================================
 
-const listDirectorySchema = z.object({
+const ListDirectorySchema = z.object({
   path: z
     .string()
     .default("")
     .describe("Vault-relative directory path. Empty string or omitted = vault root."),
 });
 
-function makeListDirectoryHandler(services: Services): ToolHandler["handler"] {
-  return async (args: Record<string, unknown>): Promise<ToolResponse> => {
-    const parsed = listDirectorySchema.safeParse(args);
-    if (!parsed.success) {
-      return {
-        content: [{ type: "text", text: `Invalid arguments: ${parsed.error.message}` }],
-        isError: true,
-      };
-    }
-
-    const { path: dirPath } = parsed.data;
-    const toolLog = createChildLog({ tool: "list_directory", path: dirPath });
-    toolLog.info({ dirPath }, "list_directory called");
-
-    try {
-      const listing = await services.vault.listDirectory(dirPath);
-      toolLog.info({ entryCount: listing.entries.length }, "list_directory complete");
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(listing, null, 2),
-          },
-        ],
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toolLog.error({ err, dirPath }, "list_directory failed");
-      return {
-        content: [{ type: "text", text: `Error listing directory: ${message}` }],
-        isError: true,
-      };
-    }
+function makeListDirectoryTool(services: Services): ToolHandler {
+  return {
+    name: "list_directory",
+    description:
+      "List files and subdirectories within the vault at the given path. Returns a DirectoryListing with path and entries. Blocked paths (.obsidian, .git, etc.) are automatically excluded.",
+    inputSchema: ListDirectorySchema,
+    async handler(args): Promise<ToolResponse> {
+      try {
+        const { path: dirPath } = ListDirectorySchema.parse(args);
+        log.info({ dirPath }, "list_directory called");
+        const listing = await services.vault.listDirectory(dirPath);
+        log.info({ entryCount: listing.entries.length }, "list_directory complete");
+        return {
+          content: [{ type: "text", text: JSON.stringify(listing, null, 2) }],
+        };
+      } catch (err) {
+        log.error({ err }, "list_directory failed");
+        return {
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          isError: true,
+        };
+      }
+    },
   };
 }
 
@@ -56,36 +45,33 @@ function makeListDirectoryHandler(services: Services): ToolHandler["handler"] {
 // get_vault_stats
 // ============================================================================
 
-const getVaultStatsSchema = z.object({});
+const GetVaultStatsSchema = z.object({});
 
-function makeGetVaultStatsHandler(services: Services): ToolHandler["handler"] {
-  return async (_args: Record<string, unknown>): Promise<ToolResponse> => {
-    const toolLog = createChildLog({ tool: "get_vault_stats" });
-    toolLog.info("get_vault_stats called");
-
-    try {
-      const stats = await services.vault.getVaultStats();
-      toolLog.info(
-        { noteCount: stats.noteCount, totalSize: stats.totalSize },
-        "get_vault_stats complete",
-      );
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(stats, null, 2),
-          },
-        ],
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toolLog.error({ err }, "get_vault_stats failed");
-      return {
-        content: [{ type: "text", text: `Error getting vault stats: ${message}` }],
-        isError: true,
-      };
-    }
+function makeGetVaultStatsTool(services: Services): ToolHandler {
+  return {
+    name: "get_vault_stats",
+    description:
+      "Get vault statistics: total note count, total size in bytes, and the most recently modified files.",
+    inputSchema: GetVaultStatsSchema,
+    async handler(_args): Promise<ToolResponse> {
+      try {
+        log.info("get_vault_stats called");
+        const stats = await services.vault.getVaultStats();
+        log.info(
+          { noteCount: stats.noteCount, totalSize: stats.totalSize },
+          "get_vault_stats complete",
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(stats, null, 2) }],
+        };
+      } catch (err) {
+        log.error({ err }, "get_vault_stats failed");
+        return {
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          isError: true,
+        };
+      }
+    },
   };
 }
 
@@ -94,26 +80,9 @@ function makeGetVaultStatsHandler(services: Services): ToolHandler["handler"] {
 // ============================================================================
 
 export function registerVaultTools(registry: Map<string, ToolHandler>, services: Services): void {
-  log.info("registering vault tools");
+  const tools = [makeListDirectoryTool(services), makeGetVaultStatsTool(services)];
 
-  const listDirectory: ToolHandler = {
-    name: "list_directory",
-    description:
-      "List files and subdirectories within the vault at the given path. Returns a DirectoryListing with path and entries. Blocked paths (.obsidian, .git, etc.) are automatically excluded.",
-    inputSchema: listDirectorySchema,
-    handler: makeListDirectoryHandler(services),
-  };
-
-  const getVaultStats: ToolHandler = {
-    name: "get_vault_stats",
-    description:
-      "Get vault statistics: total note count, total size in bytes, and the most recently modified files.",
-    inputSchema: getVaultStatsSchema,
-    handler: makeGetVaultStatsHandler(services),
-  };
-
-  registry.set(listDirectory.name, listDirectory);
-  registry.set(getVaultStats.name, getVaultStats);
-
-  log.info({ tools: [listDirectory.name, getVaultStats.name] }, "vault tools registered");
+  for (const tool of tools) {
+    registry.set(tool.name, tool);
+  }
 }

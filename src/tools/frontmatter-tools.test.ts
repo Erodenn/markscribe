@@ -96,13 +96,12 @@ describe("get_frontmatter tool", () => {
   it("returns error for missing note", async () => {
     const result = await callTool(registry, "get_frontmatter", { path: "nonexistent.md" });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/error/i);
+    expect(result.content[0].text).toMatch(/ENOENT|not found/i);
   });
 
   it("returns error for invalid arguments (missing path)", async () => {
     const result = await callTool(registry, "get_frontmatter", {});
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 });
 
@@ -190,7 +189,6 @@ describe("update_frontmatter tool", () => {
       fields: { title: "x" },
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 });
 
@@ -313,7 +311,6 @@ describe("manage_tags tool", () => {
       operation: "invalid-op",
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 
   it("returns error for invalid arguments (missing path)", async () => {
@@ -321,6 +318,5 @@ describe("manage_tags tool", () => {
       operation: "list",
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 });

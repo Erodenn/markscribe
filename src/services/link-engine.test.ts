@@ -122,6 +122,30 @@ describe("LinkEngineImpl.extractLinks", () => {
     expect(links).toHaveLength(1);
     expect(links[0].target).toBe("Target");
   });
+
+  it("skips wikilinks inside fenced code blocks", () => {
+    const engine = makeEngine(os.tmpdir());
+    const content = [
+      "Before [[RealLink]]",
+      "```",
+      "Code with [[FakeLink]] inside",
+      "```",
+      "After [[AnotherReal]]",
+    ].join("\n");
+    const links = engine.extractLinks(content);
+    expect(links).toHaveLength(2);
+    expect(links[0].target).toBe("RealLink");
+    expect(links[1].target).toBe("AnotherReal");
+  });
+
+  it("skips wikilinks inside tilde-fenced code blocks", () => {
+    const engine = makeEngine(os.tmpdir());
+    const content = ["[[Before]]", "~~~", "[[Inside]]", "~~~", "[[After]]"].join("\n");
+    const links = engine.extractLinks(content);
+    expect(links).toHaveLength(2);
+    expect(links[0].target).toBe("Before");
+    expect(links[1].target).toBe("After");
+  });
 });
 
 // ============================================================================

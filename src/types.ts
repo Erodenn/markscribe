@@ -162,8 +162,8 @@ export interface VaultService {
   /** Delete with path confirmation safety */
   deleteNote(path: string, confirmPath: string): Promise<void>;
 
-  /** Atomic move/rename */
-  moveNote(oldPath: string, newPath: string): Promise<MoveResult>;
+  /** Atomic move/rename. Errors if destination exists unless overwrite is true. */
+  moveNote(oldPath: string, newPath: string, overwrite?: boolean): Promise<MoveResult>;
 
   /** List files and subdirectories */
   listDirectory(path: string): Promise<DirectoryListing>;
@@ -301,6 +301,8 @@ export interface SchemaField {
   required: boolean;
   /** Regex pattern the value must match (strings only) */
   format?: string;
+  /** Default value for templates. Supports template vars: {{stem}}, {{today}}, etc. */
+  default?: unknown;
   /** Condition gating whether field is validated */
   when?: SchemaCondition;
   /** Additional validation rules */

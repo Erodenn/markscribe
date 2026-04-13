@@ -1222,6 +1222,52 @@ describe("SchemaEngineImpl.getTemplate", () => {
   it("throws when schema not found", () => {
     expect(() => svc.getTemplate("nonexistent")).toThrow();
   });
+
+  it("uses schema-defined defaults in template", async () => {
+    const schemasDir = path.join(tmpDir, "schemas");
+    await writeSchema(
+      schemasDir,
+      "defaults.yaml",
+      `
+name: defaults-test
+description: Schema with field defaults
+scope:
+  paths:
+    - "Defaults/"
+frontmatter:
+  fields:
+    title:
+      type: string
+      required: true
+      default: "{{stem}}"
+    created:
+      type: string
+      required: true
+      default: "{{today}}"
+    status:
+      type: string
+      required: true
+      default: "draft"
+    count:
+      type: number
+      required: true
+    optional_field:
+      type: string
+      required: false
+      default: "ignored"
+`,
+    );
+    await svc.loadSchemas(schemasDir);
+    const tmpl = svc.getTemplate("defaults-test");
+    // Schema-defined defaults are used
+    expect(tmpl.frontmatter["title"]).toBe("{{stem}}");
+    expect(tmpl.frontmatter["created"]).toBe("{{today}}");
+    expect(tmpl.frontmatter["status"]).toBe("draft");
+    // No default → type zero value
+    expect(tmpl.frontmatter["count"]).toBe(0);
+    // Non-required fields are excluded
+    expect(tmpl.frontmatter["optional_field"]).toBeUndefined();
+  });
 });
 
 // =============================================================================

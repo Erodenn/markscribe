@@ -199,19 +199,20 @@ const MoveNoteSchema = z.object({
   oldPath: z.string().min(1, "oldPath is required"),
   newPath: z.string().min(1, "newPath is required"),
   updateLinks: z.boolean().optional().default(false),
+  overwrite: z.boolean().optional().default(false),
 });
 
 function makeMoveNoteTool(services: Services): ToolHandler {
   return {
     name: "move_note",
     description:
-      "Move or rename a note within the vault. Set updateLinks to true to update all [[wikilinks]] referencing the old name.",
+      "Move or rename a note within the vault. Set updateLinks to true to update all [[wikilinks]] referencing the old name. Errors if destination exists unless overwrite is true.",
     inputSchema: MoveNoteSchema,
     async handler(args): Promise<ToolResponse> {
-      const { oldPath, newPath, updateLinks } = MoveNoteSchema.parse(args);
-      log.info({ oldPath, newPath, updateLinks }, "move_note called");
+      const { oldPath, newPath, updateLinks, overwrite } = MoveNoteSchema.parse(args);
+      log.info({ oldPath, newPath, updateLinks, overwrite }, "move_note called");
       try {
-        const result = await services.vault.moveNote(oldPath, newPath);
+        const result = await services.vault.moveNote(oldPath, newPath, overwrite);
 
         if (!updateLinks) {
           log.info({ oldPath, newPath }, "move_note complete");

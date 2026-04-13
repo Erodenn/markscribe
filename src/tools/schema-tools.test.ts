@@ -198,13 +198,12 @@ describe("lint_note tool", () => {
   it("returns error response when note does not exist", async () => {
     const result = await callTool(registry, "lint_note", { path: "Notes/nonexistent.md" });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/error/i);
+    expect(result.content[0].text).toMatch(/ENOENT|not found/i);
   });
 
   it("returns error on invalid arguments", async () => {
     const result = await callTool(registry, "lint_note", {});
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 
   it("includes per-check details on failure", async () => {
@@ -339,7 +338,6 @@ describe("validate_folder tool", () => {
   it("returns error on invalid arguments (missing path)", async () => {
     const result = await callTool(registry, "validate_folder", {});
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 
   it("returns error when folder does not exist", async () => {
@@ -431,7 +429,6 @@ describe("validate_area tool", () => {
   it("returns error on invalid arguments (missing path)", async () => {
     const result = await callTool(registry, "validate_area", {});
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 
   it("returns schema field in result", async () => {

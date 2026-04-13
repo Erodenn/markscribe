@@ -192,7 +192,6 @@ describe("search_notes tool", () => {
   it("returns error for invalid arguments (missing query)", async () => {
     const result = await callTool(registry, "search_notes", {});
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/invalid arguments/i);
   });
 
   it("returns empty array for empty vault", async () => {

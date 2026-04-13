@@ -8,7 +8,7 @@ const log = createChildLog({ module: "search-tools" });
 // search_notes
 // ============================================================================
 
-const searchNotesSchema = z.object({
+const SearchNotesSchema = z.object({
   query: z
     .string()
     .describe("Full-text search query. Supports multiple words; results ranked by BM25."),
@@ -33,49 +33,38 @@ const searchNotesSchema = z.object({
     .int()
     .positive()
     .optional()
-    .describe("Maximum number of results to return. Omit for all matching results."),
+    .describe("Maximum number of results to return. Omit for default limit."),
 });
 
-function makeSearchNotesHandler(services: Services): ToolHandler["handler"] {
-  return async (args: Record<string, unknown>): Promise<ToolResponse> => {
-    const parsed = searchNotesSchema.safeParse(args);
-    if (!parsed.success) {
-      return {
-        content: [{ type: "text", text: `Invalid arguments: ${parsed.error.message}` }],
-        isError: true,
-      };
-    }
-
-    const { query, scope, searchContent, searchFrontmatter, limit } = parsed.data;
-    const toolLog = createChildLog({ tool: "search_notes", query });
-    toolLog.info({ query, scope, searchContent, searchFrontmatter, limit }, "search_notes called");
-
-    try {
-      const results = await services.search.search(query, {
-        scope,
-        searchContent,
-        searchFrontmatter,
-        limit,
-      });
-
-      toolLog.info({ query, resultCount: results.length }, "search_notes complete");
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(results, null, 2),
-          },
-        ],
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toolLog.error({ err, query }, "search_notes failed");
-      return {
-        content: [{ type: "text", text: `Error searching notes: ${message}` }],
-        isError: true,
-      };
-    }
+function makeSearchNotesTool(services: Services): ToolHandler {
+  return {
+    name: "search_notes",
+    description:
+      "Full-text search across the vault using BM25 ranking. Optionally restrict to a path scope, search frontmatter fields, and limit result count. Returns SearchResult[] sorted by relevance score.",
+    inputSchema: SearchNotesSchema,
+    async handler(args): Promise<ToolResponse> {
+      try {
+        const { query, scope, searchContent, searchFrontmatter, limit } =
+          SearchNotesSchema.parse(args);
+        log.info({ query, scope, searchContent, searchFrontmatter, limit }, "search_notes called");
+        const results = await services.search.search(query, {
+          scope,
+          searchContent,
+          searchFrontmatter,
+          limit,
+        });
+        log.info({ query, resultCount: results.length }, "search_notes complete");
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      } catch (err) {
+        log.error({ err }, "search_notes failed");
+        return {
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          isError: true,
+        };
+      }
+    },
   };
 }
 
@@ -84,17 +73,9 @@ function makeSearchNotesHandler(services: Services): ToolHandler["handler"] {
 // ============================================================================
 
 export function registerSearchTools(registry: Map<string, ToolHandler>, services: Services): void {
-  log.info("registering search tools");
+  const tools = [makeSearchNotesTool(services)];
 
-  const searchNotes: ToolHandler = {
-    name: "search_notes",
-    description:
-      "Full-text search across the vault using BM25 ranking. Optionally restrict to a path scope, search frontmatter fields, and limit result count. Returns SearchResult[] sorted by relevance score.",
-    inputSchema: searchNotesSchema,
-    handler: makeSearchNotesHandler(services),
-  };
-
-  registry.set(searchNotes.name, searchNotes);
-
-  log.info({ tools: [searchNotes.name] }, "search tools registered");
+  for (const tool of tools) {
+    registry.set(tool.name, tool);
+  }
 }

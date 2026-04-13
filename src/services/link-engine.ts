@@ -40,19 +40,29 @@ export class LinkEngineImpl implements LinkEngine {
   extractLinks(content: string): WikiLink[] {
     log.debug({ contentLength: content.length }, "extractLinks");
     const links: WikiLink[] = [];
-    const regex = new RegExp(WIKILINK_RE.source, "g");
-    let match: RegExpExecArray | null;
+    const lines = content.split("\n");
+    let inCodeBlock = false;
 
-    while ((match = regex.exec(content)) !== null) {
-      const raw = match[0];
-      const target = match[1].trim();
-      const section = match[2]?.trim() ?? null;
-      const display = match[3]?.trim() ?? null;
+    for (const line of lines) {
+      if (CODE_FENCE_RE.test(line.trim())) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+      if (inCodeBlock) continue;
 
-      // Skip empty or malformed links
-      if (!target) continue;
+      const regex = new RegExp(WIKILINK_RE.source, "g");
+      let match: RegExpExecArray | null;
 
-      links.push({ raw, target, display, section });
+      while ((match = regex.exec(line)) !== null) {
+        const raw = match[0];
+        const target = match[1].trim();
+        const section = match[2]?.trim() ?? null;
+        const display = match[3]?.trim() ?? null;
+
+        if (!target) continue;
+
+        links.push({ raw, target, display, section });
+      }
     }
 
     log.debug({ linkCount: links.length }, "extractLinks complete");
@@ -64,7 +74,7 @@ export class LinkEngineImpl implements LinkEngine {
     const graph: LinkGraph = new Map();
 
     const files = await this.collectFiles(scope);
-    const existingStems = await this.buildStemSet(files);
+    const existingStems = this.buildStemSet(files);
 
     for (const filePath of files) {
       const links = await this.getLinksForFile(filePath);
@@ -195,7 +205,7 @@ export class LinkEngineImpl implements LinkEngine {
     const brokenLinks: BrokenLink[] = [];
 
     const files = await this.collectFiles(scope);
-    const existingStems = await this.buildStemSet(files);
+    const existingStems = this.buildStemSet(files);
 
     for (const filePath of files) {
       const content = await this.readFileContent(filePath);
@@ -251,7 +261,7 @@ export class LinkEngineImpl implements LinkEngine {
       inDegree.set(f, 0);
     }
 
-    const existingStems = await this.buildStemSet(files);
+    const existingStems = this.buildStemSet(files);
 
     for (const filePath of files) {
       const links = await this.getLinksForFile(filePath);
@@ -375,7 +385,7 @@ export class LinkEngineImpl implements LinkEngine {
   /**
    * Build a Set of stems from a list of vault-relative file paths.
    */
-  private async buildStemSet(files: string[]): Promise<Set<string>> {
+  private buildStemSet(files: string[]): Set<string> {
     const stems = new Set<string>();
     for (const f of files) {
       stems.add(this.stemFromPath(f));

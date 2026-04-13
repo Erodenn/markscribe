@@ -165,11 +165,27 @@ export class VaultServiceImpl implements VaultService {
     await fs.unlink(fullPath);
   }
 
-  async moveNote(oldRelativePath: string, newRelativePath: string): Promise<MoveResult> {
-    log.info({ oldPath: oldRelativePath, newPath: newRelativePath }, "moveNote");
+  async moveNote(
+    oldRelativePath: string,
+    newRelativePath: string,
+    overwrite = false,
+  ): Promise<MoveResult> {
+    log.info({ oldPath: oldRelativePath, newPath: newRelativePath, overwrite }, "moveNote");
 
     const oldFull = this.resolvePath(oldRelativePath);
     const newFull = this.resolvePath(newRelativePath);
+
+    // Guard against silently overwriting an existing file
+    if (!overwrite) {
+      try {
+        await fs.access(newFull);
+        throw new Error(
+          `moveNote: destination "${newRelativePath}" already exists. Set overwrite=true to replace it.`,
+        );
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+    }
 
     await fs.mkdir(path.dirname(newFull), { recursive: true });
 
