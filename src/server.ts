@@ -88,15 +88,11 @@ export async function startServer(): Promise<void> {
   const links = new LinkEngineImpl(vault);
 
   // Load schemas from configured directory (default: .vaultscribe/schemas/)
+  // Always set schemasDir so refresh() can discover schemas added after startup
   const schemasDirName = config.schemas?.directory ?? DEFAULT_SCHEMAS_DIR;
   const schemasDir = path.join(vaultPath, ".vaultscribe", schemasDirName);
-  try {
-    await fs.access(schemasDir);
-    await schema.loadSchemas(schemasDir);
-    vaultscribeLog.info({ schemasDir }, "schemas loaded");
-  } catch {
-    vaultscribeLog.debug({ schemasDir }, "schemas directory not found, skipping");
-  }
+  await schema.loadSchemas(schemasDir);
+  vaultscribeLog.info({ schemasDir }, "schemas loaded");
 
   // Load bundled default schemas (user schemas win on name collision)
   schema.loadBundledSchemas();

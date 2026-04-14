@@ -16,12 +16,13 @@ function makeLintNoteTool(services: Services): ToolHandler {
   return {
     name: "lint_note",
     description:
-      "Validate a note against its applicable schema. Returns a LintResult with pass/fail status, which schema was applied (null if none matched), and individual check results.",
+      "Validate a note against its applicable schema. Notes can override schema resolution via a `note_schema:` frontmatter field; otherwise the convention cascade determines the schema. Returns a LintResult with pass/fail status, which schema was applied (null if none matched), and individual check results.",
     inputSchema: LintNoteSchema,
     async handler(args): Promise<ToolResponse> {
       try {
         const { path: notePath } = LintNoteSchema.parse(args);
         log.info({ notePath }, "lint_note called");
+        await services.schema.refresh();
         const result = await services.schema.lintNote(notePath);
         log.info(
           { schema: result.schema, pass: result.pass, checkCount: result.checks.length },
@@ -53,12 +54,13 @@ function makeValidateFolderTool(services: Services): ToolHandler {
   return {
     name: "validate_folder",
     description:
-      "Classify and validate a folder. Returns a FolderValidation with the folder type (packet, superfolder, supplemental, unclassified), per-note lint results, and structural check results.",
+      "Classify and validate a folder. The convention cascade drives folder schema assignment. Returns a FolderValidation with the folder type (packet, superfolder, supplemental, unclassified), per-note lint results, and structural check results.",
     inputSchema: ValidateFolderSchema,
     async handler(args): Promise<ToolResponse> {
       try {
         const { path: folderPath } = ValidateFolderSchema.parse(args);
         log.info({ folderPath }, "validate_folder called");
+        await services.schema.refresh();
         const result = await services.schema.validateFolder(folderPath);
         log.info(
           { schema: result.schema, folderType: result.folderType, pass: result.pass },
@@ -90,15 +92,16 @@ function makeValidateAreaTool(services: Services): ToolHandler {
   return {
     name: "validate_area",
     description:
-      "Recursively validate a vault subtree. Returns an AreaValidation with per-folder results and a summary of total, passed, failed, and skipped folders.",
+      "Recursively validate a vault subtree using the convention cascade. Returns an AreaValidation with per-folder results and a summary of total, passed, failed, and skipped folders.",
     inputSchema: ValidateAreaSchema,
     async handler(args): Promise<ToolResponse> {
       try {
         const { path: areaPath } = ValidateAreaSchema.parse(args);
         log.info({ areaPath }, "validate_area called");
+        await services.schema.refresh();
         const result = await services.schema.validateArea(areaPath);
         log.info(
-          { schema: result.schema, pass: result.pass, summary: result.summary },
+          { pass: result.pass, summary: result.summary },
           "validate_area complete",
         );
         return {
@@ -125,11 +128,12 @@ function makeListSchemasTool(services: Services): ToolHandler {
   return {
     name: "list_schemas",
     description:
-      "List all loaded schemas with their names, descriptions, scopes, field counts, content rule counts, and whether folder configuration is present.",
+      "List all loaded schemas with their names, descriptions, and type-specific details. Note schemas show field counts and content rule counts. Folder schemas show note schema role assignments, structural rule counts, and hub configuration.",
     inputSchema: ListSchemasSchema,
     async handler(_args): Promise<ToolResponse> {
       try {
         log.info("list_schemas called");
+        await services.schema.refresh();
         const schemas = services.schema.listSchemas();
         log.info({ count: schemas.length }, "list_schemas complete");
         return {
@@ -161,6 +165,7 @@ function makeValidateVaultTool(services: Services): ToolHandler {
     async handler(_args): Promise<ToolResponse> {
       try {
         log.info("validate_vault called");
+        await services.schema.refresh();
         const result = await services.schema.validateVault();
         log.info(
           { pass: result.pass, summary: result.summary },

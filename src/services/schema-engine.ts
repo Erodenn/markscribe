@@ -32,6 +32,7 @@ export class SchemaEngineImpl implements SchemaEngine {
   private readonly noteEngine: NoteSchemaEngineImpl;
   private readonly folderEngine: FolderSchemaEngineImpl;
   private readonly cascade: ConventionCascadeImpl;
+  private schemasDir: string | null = null;
 
   constructor(vaultService: VaultService) {
     this.vault = vaultService;
@@ -47,6 +48,7 @@ export class SchemaEngineImpl implements SchemaEngine {
   // ==========================================================================
 
   async loadSchemas(schemasDir: string): Promise<void> {
+    this.schemasDir = schemasDir;
     await this.registry.loadFromDirectory(schemasDir);
   }
 
@@ -61,6 +63,21 @@ export class SchemaEngineImpl implements SchemaEngine {
 
   async discoverConventions(): Promise<void> {
     await this.cascade.discover();
+  }
+
+  // ==========================================================================
+  // Runtime refresh — clear all state and reload from disk
+  // ==========================================================================
+
+  async refresh(): Promise<void> {
+    log.info("refresh start");
+    this.registry.clear();
+    if (this.schemasDir) {
+      await this.loadSchemas(this.schemasDir);
+    }
+    this.loadBundledSchemas();
+    await this.discoverConventions();
+    log.info("refresh complete");
   }
 
   // ==========================================================================
@@ -97,8 +114,8 @@ export class SchemaEngineImpl implements SchemaEngine {
 
     // Check explicit schema tag in frontmatter
     let schema: NoteSchema | null = null;
-    if (typeof note.frontmatter.schema === "string") {
-      schema = this.registry.getNoteSchema(note.frontmatter.schema);
+    if (typeof note.frontmatter.note_schema === "string") {
+      schema = this.registry.getNoteSchema(note.frontmatter.note_schema);
     }
 
     // Fall back to convention cascade resolution
@@ -135,7 +152,6 @@ export class SchemaEngineImpl implements SchemaEngine {
 
   async validateVault(): Promise<VaultValidation> {
     log.info("validateVault start");
-    await this.cascade.discover(); // refresh
 
     const areaResult = await this.folderEngine.validateArea(
       "",
@@ -182,8 +198,8 @@ export class SchemaEngineImpl implements SchemaEngine {
   private async lintNoteWithPreRead(notePath: string, preReadNote?: ParsedNote): Promise<LintResult> {
     if (preReadNote) {
       let schema: NoteSchema | null = null;
-      if (typeof preReadNote.frontmatter.schema === "string") {
-        schema = this.registry.getNoteSchema(preReadNote.frontmatter.schema);
+      if (typeof preReadNote.frontmatter.note_schema === "string") {
+        schema = this.registry.getNoteSchema(preReadNote.frontmatter.note_schema);
       }
       if (!schema) {
         schema = this.resolveNoteSchema(notePath);
