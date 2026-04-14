@@ -363,24 +363,123 @@ export interface HubConfig {
 
 export type HubDetectionRule = { pattern: string } | { fallback: SchemaCondition };
 
+/** Built-in structural check identifiers */
+export type StructuralCheckType =
+  | "hubCoversChildren"
+  | "noOrphansInFolder"
+  | "noSubdirectories"
+  | "requiredFile"
+  | "filenamePattern"
+  | "minFileCount"
+  | "maxFileCount"
+  | "minOutgoingLinks"
+  | "allNotesMatch"
+  | "someNoteMatches";
+
 export interface StructuralRule {
   /** User-chosen name */
   name: string;
-  /** Built-in check: "hubCoversChildren" | "noOrphansInFolder" */
-  check: "hubCoversChildren" | "noOrphansInFolder";
+  /** Built-in check identifier */
+  check: StructuralCheckType;
+  /** Pattern for requiredFile, filenamePattern */
+  pattern?: string;
+  /** Count for minFileCount, maxFileCount, minOutgoingLinks, someNoteMatches */
+  count?: number;
+  /** Condition for allNotesMatch, someNoteMatches */
+  when?: SchemaCondition;
 }
+
+// ============================================================================
+// Note Schema (portable definition, no path binding)
+// ============================================================================
+
+export interface NoteSchema {
+  name: string;
+  description: string;
+  type: "note";
+  frontmatter: SchemaFrontmatter;
+  content: SchemaContent;
+}
+
+// ============================================================================
+// Folder Schema (structural rules, bound via _conventions.md)
+// ============================================================================
+
+export interface FolderSchema {
+  name: string;
+  description: string;
+  type: "folder";
+  noteSchemas: RoleBasedNoteSchemas;
+  classification: FolderClassification;
+  hub?: HubConfig;
+  structural?: StructuralRule[];
+  includes?: string[];
+  overrides?: FolderSchemaOverrides;
+}
+
+export interface RoleBasedNoteSchemas {
+  default?: string;
+  hub?: string;
+  [role: string]: string | undefined;
+}
+
+export interface FolderSchemaOverrides {
+  classification?: Partial<FolderClassification>;
+  hub?: Partial<HubConfig>;
+  structural?: StructuralRule[];
+  noteSchemas?: Partial<RoleBasedNoteSchemas>;
+}
+
+// ============================================================================
+// Convention Cascade
+// ============================================================================
+
+export interface ConventionBinding {
+  folderSchema: string;
+  inherit?: boolean;
+}
+
+export interface ResolvedConvention {
+  path: string;
+  folderSchemaName: string;
+  folderSchema: FolderSchema;
+  source: string;
+}
+
+// ============================================================================
+// Vault Validation
+// ============================================================================
+
+export interface VaultValidation {
+  pass: boolean;
+  conventionSources: string[];
+  folders: Record<string, FolderValidation>;
+  summary: { total: number; passed: number; failed: number; skipped: number };
+}
+
+// ============================================================================
+// Schema Info (updated for note/folder distinction)
+// ============================================================================
 
 /** Summary info about a loaded schema */
 export interface SchemaInfo {
   name: string;
   description: string;
-  scope: SchemaScope;
-  /** Number of frontmatter field definitions */
-  fieldCount: number;
-  /** Number of content rules */
-  contentRuleCount: number;
-  /** Whether folder validation is configured */
-  hasFolderConfig: boolean;
+  type: "note" | "folder";
+  /** Scope rules (legacy schemas only) */
+  scope?: SchemaScope;
+  /** Number of frontmatter field definitions (note schemas) */
+  fieldCount?: number;
+  /** Number of content rules (note schemas) */
+  contentRuleCount?: number;
+  /** Whether folder validation is configured (legacy schemas) */
+  hasFolderConfig?: boolean;
+  /** Note schema role assignments (folder schemas) */
+  noteSchemaRoles?: Record<string, string>;
+  /** Number of structural rules (folder schemas) */
+  structuralRuleCount?: number;
+  /** Whether hub config is present (folder schemas) */
+  hasHubConfig?: boolean;
 }
 
 /** Template for convention-aware note creation */
@@ -456,14 +555,23 @@ export interface AreaValidation {
 
 /**
  * Convention schema loading, validation, and template resolution.
- * Constructor: (vaultService: VaultService, frontmatterService: FrontmatterService)
+ * Constructor: (vaultService: VaultService)
  */
 export interface SchemaEngine {
   /** Load and compile YAML schema files from directory */
   loadSchemas(schemasDir: string): Promise<void>;
 
-  /** Resolve which schema applies to a path (longest prefix wins) */
+  /** Load bundled default schemas */
+  loadBundledSchemas(): void;
+
+  /** Discover _conventions.md notes and resolve cascade */
+  discoverConventions(): Promise<void>;
+
+  /** Resolve which schema applies to a path (longest prefix wins) — legacy */
   getSchemaForPath(notePath: string): Schema | null;
+
+  /** Resolve the note schema for a given note path (3-step resolution) */
+  resolveNoteSchema(notePath: string): NoteSchema | null;
 
   /** Validate a single note against its applicable schema */
   lintNote(path: string): Promise<LintResult>;
@@ -473,6 +581,9 @@ export interface SchemaEngine {
 
   /** Recursive validation of a vault subtree */
   validateArea(path: string): Promise<AreaValidation>;
+
+  /** Validate entire vault using convention cascade */
+  validateVault(): Promise<VaultValidation>;
 
   /** Get template frontmatter + content for convention-aware creation */
   getTemplate(schemaName: string): NoteTemplate;

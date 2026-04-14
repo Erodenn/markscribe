@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { VaultServiceImpl } from "./vault-service.js";
-import { FrontmatterServiceImpl } from "./frontmatter-service.js";
 import { SearchServiceImpl } from "./search-service.js";
 import { PathFilterImpl } from "./path-filter.js";
 
@@ -20,9 +19,8 @@ async function writeFile(base: string, relPath: string, content: string): Promis
 function makeServices(vaultPath: string) {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
   const vault = new VaultServiceImpl(vaultPath, filter);
-  const frontmatter = new FrontmatterServiceImpl(vault);
-  const search = new SearchServiceImpl(vault, frontmatter);
-  return { vault, frontmatter, search };
+  const search = new SearchServiceImpl(vault);
+  return { vault, search };
 }
 
 describe("SearchServiceImpl", () => {
@@ -389,8 +387,7 @@ describe("SearchServiceImpl", () => {
     it("respects custom maxResults from config", async () => {
       const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
       const vault = new VaultServiceImpl(tmpDir, filter);
-      const fm = new FrontmatterServiceImpl(vault);
-      const customSearch = new SearchServiceImpl(vault, fm, { maxResults: 3 });
+      const customSearch = new SearchServiceImpl(vault, { maxResults: 3 });
 
       for (let i = 0; i < 10; i++) {
         await writeFile(tmpDir, `n-${i}.md`, `Shared term in note ${i}`);
@@ -402,8 +399,7 @@ describe("SearchServiceImpl", () => {
     it("explicit limit overrides maxResults config", async () => {
       const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
       const vault = new VaultServiceImpl(tmpDir, filter);
-      const fm = new FrontmatterServiceImpl(vault);
-      const customSearch = new SearchServiceImpl(vault, fm, { maxResults: 100 });
+      const customSearch = new SearchServiceImpl(vault, { maxResults: 100 });
 
       for (let i = 0; i < 10; i++) {
         await writeFile(tmpDir, `x-${i}.md`, `Targetword in note ${i}`);

@@ -17,7 +17,7 @@ function makeServices(vaultPath: string): Services {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
   const vault = new VaultServiceImpl(vaultPath, filter);
   const frontmatter = new FrontmatterServiceImpl(vault);
-  const search = new SearchServiceImpl(vault, frontmatter);
+  const search = new SearchServiceImpl(vault);
   return {
     vault,
     frontmatter,

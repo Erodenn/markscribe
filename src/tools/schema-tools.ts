@@ -147,6 +147,40 @@ function makeListSchemasTool(services: Services): ToolHandler {
 }
 
 // ============================================================================
+// validate_vault
+// ============================================================================
+
+const ValidateVaultSchema = z.object({});
+
+function makeValidateVaultTool(services: Services): ToolHandler {
+  return {
+    name: "validate_vault",
+    description:
+      "Validate the entire vault using the convention cascade. Discovers _conventions.md notes, resolves folder schemas, and validates all managed directories. Returns a VaultValidation with per-folder results and a summary.",
+    inputSchema: ValidateVaultSchema,
+    async handler(_args): Promise<ToolResponse> {
+      try {
+        log.info("validate_vault called");
+        const result = await services.schema.validateVault();
+        log.info(
+          { pass: result.pass, summary: result.summary },
+          "validate_vault complete",
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        log.error({ err }, "validate_vault failed");
+        return {
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          isError: true,
+        };
+      }
+    },
+  };
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -155,6 +189,7 @@ export function registerSchemaTools(registry: Map<string, ToolHandler>, services
     makeLintNoteTool(services),
     makeValidateFolderTool(services),
     makeValidateAreaTool(services),
+    makeValidateVaultTool(services),
     makeListSchemasTool(services),
   ];
 

@@ -1,4 +1,3 @@
-import path from "node:path";
 import type {
   LinkEngine,
   VaultService,
@@ -10,7 +9,7 @@ import type {
   RenameResult,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
-import { escapeRegex, walkVaultFiles } from "../utils.js";
+import { escapeRegex, getStem, walkVaultFiles } from "../utils.js";
 
 const log = createChildLog({ service: "LinkEngine" });
 
@@ -399,11 +398,11 @@ export class LinkEngineImpl implements LinkEngine {
   }
 
   /**
-   * Get the stem of a vault-relative path (filename without extension).
-   * Example: "folder/Note Name.md" → "Note Name"
+   * Get the stem of a vault-relative path (filename without extension, leading _ stripped).
+   * Example: "folder/Note Name.md" → "Note Name", "folder/_Hub.md" → "Hub"
    */
   private stemFromPath(relPath: string): string {
-    return path.basename(relPath, path.extname(relPath));
+    return getStem(relPath);
   }
 
   /**

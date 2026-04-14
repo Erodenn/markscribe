@@ -1,7 +1,6 @@
 import type {
   SearchService,
   VaultService,
-  FrontmatterService,
   SearchOptions,
   SearchResult,
   FrontmatterOperator,
@@ -66,17 +65,14 @@ export interface SearchServiceConfig {
 
 export class SearchServiceImpl implements SearchService {
   private readonly vault: VaultService;
-  private readonly frontmatter: FrontmatterService;
   private readonly maxResults: number;
   private readonly excerptChars: number;
 
   constructor(
     vaultService: VaultService,
-    frontmatterService: FrontmatterService,
     config?: SearchServiceConfig,
   ) {
     this.vault = vaultService;
-    this.frontmatter = frontmatterService;
     this.maxResults = config?.maxResults ?? DEFAULT_MAX_RESULTS;
     this.excerptChars = config?.excerptChars ?? DEFAULT_EXCERPT_CHARS;
     log.info(

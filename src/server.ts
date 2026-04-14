@@ -80,11 +80,11 @@ export async function startServer(): Promise<void> {
   const pathFilter = new PathFilterImpl(pathFilterConfig);
   const vault = new VaultServiceImpl(vaultPath, pathFilter);
   const frontmatter = new FrontmatterServiceImpl(vault);
-  const search = new SearchServiceImpl(vault, frontmatter, {
+  const search = new SearchServiceImpl(vault, {
     maxResults: config.search?.max_results,
     excerptChars: config.search?.excerpt_chars,
   });
-  const schema = new SchemaEngineImpl(vault, frontmatter);
+  const schema = new SchemaEngineImpl(vault);
   const links = new LinkEngineImpl(vault);
 
   // Load schemas from configured directory (default: .vaultscribe/schemas/)
@@ -97,6 +97,12 @@ export async function startServer(): Promise<void> {
   } catch {
     vaultscribeLog.debug({ schemasDir }, "schemas directory not found, skipping");
   }
+
+  // Load bundled default schemas (user schemas win on name collision)
+  schema.loadBundledSchemas();
+
+  // Discover _conventions.md notes for folder schema cascade
+  await schema.discoverConventions();
 
   const services: Services = { vault, frontmatter, search, schema, links };
   const registry = buildRegistry(services);

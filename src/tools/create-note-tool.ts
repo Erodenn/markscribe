@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { z } from "zod";
 import type { ToolHandler, Services, ToolResponse, LintResult } from "../types.js";
-import { expandTemplateVars, buildTemplateContext } from "../services/schema-engine.js";
+import { expandTemplateVars, buildTemplateContext } from "../utils.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "create-note-tool" });
