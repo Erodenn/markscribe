@@ -9,21 +9,9 @@ import type {
   RenameResult,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
-import { escapeRegex, getStem, walkVaultFiles } from "../utils.js";
+import { escapeRegex, getStem, walkVaultFiles, scanWikilinks, WIKILINK_RE, CODE_FENCE_RE } from "../utils.js";
 
 const log = createChildLog({ service: "LinkEngine" });
-
-/**
- * Regex for wikilink extraction.
- * Matches: [[target]], [[target|display]], [[target#section]], [[target#section|display]]
- * Non-greedy to handle multiple links on one line.
- */
-const WIKILINK_RE = /\[\[([^\]|#]+?)(?:#([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
-
-/**
- * Regex for code block detection (fenced ``` or ~~~).
- */
-const CODE_FENCE_RE = /^```|^~~~/;
 
 export class LinkEngineImpl implements LinkEngine {
   private readonly vault: VaultService;
@@ -40,32 +28,14 @@ export class LinkEngineImpl implements LinkEngine {
   extractLinks(content: string): WikiLink[] {
     log.debug({ contentLength: content.length }, "extractLinks");
     const links: WikiLink[] = [];
-    const lines = content.split("\n");
-    let inCodeBlock = false;
-    const regex = new RegExp(WIKILINK_RE.source, "g");
-
-    for (const line of lines) {
-      if (CODE_FENCE_RE.test(line.trim())) {
-        inCodeBlock = !inCodeBlock;
-        continue;
-      }
-      if (inCodeBlock) continue;
-
-      regex.lastIndex = 0;
-      let match: RegExpExecArray | null;
-
-      while ((match = regex.exec(line)) !== null) {
-        const raw = match[0];
-        const target = match[1].trim();
-        const section = match[2]?.trim() ?? null;
-        const display = match[3]?.trim() ?? null;
-
-        if (!target) continue;
-
-        links.push({ raw, target, display, section });
-      }
+    for (const scanned of scanWikilinks(content)) {
+      links.push({
+        raw: scanned.raw,
+        target: scanned.target,
+        display: scanned.display,
+        section: scanned.section,
+      });
     }
-
     log.debug({ linkCount: links.length }, "extractLinks complete");
     return links;
   }
@@ -97,7 +67,7 @@ export class LinkEngineImpl implements LinkEngine {
 
   async getBacklinks(notePath: string): Promise<BacklinkEntry[]> {
     log.info({ notePath }, "getBacklinks");
-    const targetStem = this.stemFromPath(notePath);
+    const targetStem = getStem(notePath);
     const backlinks: BacklinkEntry[] = [];
 
     const files = await this.collectFiles();
@@ -108,37 +78,14 @@ export class LinkEngineImpl implements LinkEngine {
       const content = await this.readFileContent(filePath);
       if (!content) continue;
 
-      const lines = content.split("\n");
-      let inCodeBlock = false;
-      const regex = new RegExp(WIKILINK_RE.source, "g");
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        if (CODE_FENCE_RE.test(line.trim())) {
-          inCodeBlock = !inCodeBlock;
-          continue;
-        }
-        if (inCodeBlock) continue;
-
-        regex.lastIndex = 0;
-        let match: RegExpExecArray | null;
-        while ((match = regex.exec(line)) !== null) {
-          const raw = match[0];
-          const target = match[1].trim();
-          const section = match[2]?.trim() ?? null;
-          const display = match[3]?.trim() ?? null;
-
-          if (!target) continue;
-
-          const linkStem = this.stemFromTarget(target);
-          if (linkStem === targetStem) {
-            backlinks.push({
-              sourcePath: filePath,
-              link: { raw, target, display, section },
-              line: i + 1,
-            });
-          }
+      for (const scanned of scanWikilinks(content)) {
+        const linkStem = this.stemFromTarget(scanned.target);
+        if (linkStem === targetStem) {
+          backlinks.push({
+            sourcePath: filePath,
+            link: { raw: scanned.raw, target: scanned.target, display: scanned.display, section: scanned.section },
+            line: scanned.line,
+          });
         }
       }
     }
@@ -149,10 +96,15 @@ export class LinkEngineImpl implements LinkEngine {
 
   async findUnlinkedMentions(notePath: string): Promise<UnlinkedMention[]> {
     log.info({ notePath }, "findUnlinkedMentions");
-    const targetStem = this.stemFromPath(notePath);
+    const targetStem = getStem(notePath);
     const mentions: UnlinkedMention[] = [];
 
     const files = await this.collectFiles();
+
+    const searchRegex = new RegExp(
+      `(?<![\\[|])\\b${escapeRegex(targetStem)}\\b(?![\\]|])`,
+      "g",
+    );
 
     for (const filePath of files) {
       if (filePath === notePath) continue;
@@ -176,10 +128,7 @@ export class LinkEngineImpl implements LinkEngine {
         const wikilinkRanges = this.getWikilinkRanges(line);
 
         // Search for plain-text occurrences of the stem
-        const searchRegex = new RegExp(
-          `(?<![\\[|])\\b${escapeRegex(targetStem)}\\b(?![\\]|])`,
-          "g",
-        );
+        searchRegex.lastIndex = 0;
         let match: RegExpExecArray | null;
 
         while ((match = searchRegex.exec(line)) !== null) {
@@ -213,38 +162,14 @@ export class LinkEngineImpl implements LinkEngine {
       const content = await this.readFileContent(filePath);
       if (!content) continue;
 
-      const lines = content.split("\n");
-      let inCodeBlock = false;
-      const regex = new RegExp(WIKILINK_RE.source, "g");
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        if (CODE_FENCE_RE.test(line.trim())) {
-          inCodeBlock = !inCodeBlock;
-          continue;
-        }
-        if (inCodeBlock) continue;
-
-        regex.lastIndex = 0;
-        let match: RegExpExecArray | null;
-
-        while ((match = regex.exec(line)) !== null) {
-          const raw = match[0];
-          const target = match[1].trim();
-          const section = match[2]?.trim() ?? null;
-          const display = match[3]?.trim() ?? null;
-
-          if (!target) continue;
-
-          const stem = this.stemFromTarget(target);
-          if (!existingStems.has(stem)) {
-            brokenLinks.push({
-              sourcePath: filePath,
-              link: { raw, target, display, section },
-              line: i + 1,
-            });
-          }
+      for (const scanned of scanWikilinks(content)) {
+        const stem = this.stemFromTarget(scanned.target);
+        if (!existingStems.has(stem)) {
+          brokenLinks.push({
+            sourcePath: filePath,
+            link: { raw: scanned.raw, target: scanned.target, display: scanned.display, section: scanned.section },
+            line: scanned.line,
+          });
         }
       }
     }
@@ -267,7 +192,7 @@ export class LinkEngineImpl implements LinkEngine {
     // Map each stem to the file paths that share it (for O(1) lookup)
     const stemToFiles = new Map<string, string[]>();
     for (const f of files) {
-      const stem = this.stemFromPath(f);
+      const stem = getStem(f);
       const existing = stemToFiles.get(stem);
       if (existing) {
         existing.push(f);
@@ -302,6 +227,7 @@ export class LinkEngineImpl implements LinkEngine {
     let filesUpdated = 0;
     let linksUpdated = 0;
     const modifiedFiles: string[] = [];
+    const wikilinkRegex = new RegExp(WIKILINK_RE.source, "g");
 
     for (const filePath of files) {
       const content = await this.readFileContent(filePath);
@@ -314,8 +240,8 @@ export class LinkEngineImpl implements LinkEngine {
       // Replace wikilinks matching oldStem
       // We handle: [[oldStem]], [[oldStem|display]], [[oldStem#section]], [[oldStem#section|display]]
       // Also path-style: [[folder/oldStem]], [[folder/oldStem|display]], etc.
-      const regex = new RegExp(WIKILINK_RE.source, "g");
-      updated = updated.replace(regex, (raw, target, section, display) => {
+      wikilinkRegex.lastIndex = 0;
+      updated = updated.replace(wikilinkRegex, (raw, target, section, display) => {
         const trimmedTarget = target.trim();
         const linkStem = this.stemFromTarget(trimmedTarget);
 
@@ -371,7 +297,7 @@ export class LinkEngineImpl implements LinkEngine {
   private buildStemSet(files: string[]): Set<string> {
     const stems = new Set<string>();
     for (const f of files) {
-      stems.add(this.stemFromPath(f));
+      stems.add(getStem(f));
     }
     return stems;
   }
@@ -395,14 +321,6 @@ export class LinkEngineImpl implements LinkEngine {
     const content = await this.readFileContent(filePath);
     if (!content) return [];
     return this.extractLinks(content);
-  }
-
-  /**
-   * Get the stem of a vault-relative path (filename without extension, leading _ stripped).
-   * Example: "folder/Note Name.md" → "Note Name", "folder/_Hub.md" → "Hub"
-   */
-  private stemFromPath(relPath: string): string {
-    return getStem(relPath);
   }
 
   /**

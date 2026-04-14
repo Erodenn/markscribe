@@ -39,18 +39,10 @@ export class VaultServiceImpl implements VaultService {
    * Throws if the resolved path escapes the vault root or is blocked by PathFilter.
    */
   resolvePath(relativePath: string): string {
-    const absolute = path.resolve(this.vaultPath, relativePath);
-
-    const relative = path.relative(this.vaultPath, absolute);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      throw new Error(`Path traversal detected: "${relativePath}" escapes vault root`);
-    }
-
-    const normalizedRelative = relative.replace(/\\/g, "/");
-    if (!this.pathFilter.isAllowed(normalizedRelative)) {
+    const { absolute, normalized } = this.resolveAbsolute(relativePath);
+    if (!this.pathFilter.isAllowed(normalized)) {
       throw new Error(`Path not allowed: "${relativePath}"`);
     }
-
     log.debug({ relativePath, absolute }, "resolvePath");
     return absolute;
   }
@@ -304,10 +296,7 @@ export class VaultServiceImpl implements VaultService {
   // Private helpers
   // =========================================================================
 
-  /**
-   * Resolve a vault-relative path for directory listing (no extension check).
-   */
-  private resolvePathForListing(relativePath: string): string {
+  private resolveAbsolute(relativePath: string): { absolute: string; normalized: string } {
     const absolute = path.resolve(this.vaultPath, relativePath);
 
     const relative = path.relative(this.vaultPath, absolute);
@@ -315,11 +304,18 @@ export class VaultServiceImpl implements VaultService {
       throw new Error(`Path traversal detected: "${relativePath}" escapes vault root`);
     }
 
-    const normalizedRelative = relative.replace(/\\/g, "/");
-    if (!this.pathFilter.isAllowedForListing(normalizedRelative)) {
+    const normalized = relative.replace(/\\/g, "/");
+    return { absolute, normalized };
+  }
+
+  /**
+   * Resolve a vault-relative path for directory listing (no extension check).
+   */
+  private resolvePathForListing(relativePath: string): string {
+    const { absolute, normalized } = this.resolveAbsolute(relativePath);
+    if (!this.pathFilter.isAllowedForListing(normalized)) {
       throw new Error(`Path not allowed for listing: "${relativePath}"`);
     }
-
     return absolute;
   }
 }

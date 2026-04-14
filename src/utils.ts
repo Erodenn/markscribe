@@ -43,8 +43,12 @@ export function expandTemplateVars(template: string, ctx: TemplateContext): stri
   });
 }
 
+export function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
 export function buildTemplateContext(notePath: string): TemplateContext {
-  const normalized = notePath.replace(/\\/g, "/");
+  const normalized = normalizePath(notePath);
   const basename = path.basename(normalized);
   const filename = path.basename(basename, path.extname(basename));
   const stem = filename.startsWith("_") ? filename.slice(1) : filename;
@@ -89,6 +93,52 @@ export function evalCondition(condition: SchemaCondition, fm: Record<string, unk
 // ============================================================================
 // Wikilink extraction (minimal, for structural rules)
 // ============================================================================
+
+export const WIKILINK_RE = /\[\[([^\]|#]+?)(?:#([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
+
+export const CODE_FENCE_RE = /^```|^~~~/;
+
+export interface ScannedLink {
+  raw: string;
+  target: string;
+  section: string | null;
+  display: string | null;
+  line: number;    // 1-based
+  column: number;  // 0-based character offset within line
+}
+
+export function* scanWikilinks(content: string): Generator<ScannedLink> {
+  const lines = content.split("\n");
+  let inCodeBlock = false;
+  const regex = new RegExp(WIKILINK_RE.source, "g");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (CODE_FENCE_RE.test(line.trim())) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    regex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(line)) !== null) {
+      const target = match[1].trim();
+      if (!target) continue;
+
+      yield {
+        raw: match[0],
+        target,
+        section: match[2]?.trim() ?? null,
+        display: match[3]?.trim() ?? null,
+        line: i + 1,
+        column: match.index,
+      };
+    }
+  }
+}
 
 const WIKILINK_STEM_RE = /\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g;
 

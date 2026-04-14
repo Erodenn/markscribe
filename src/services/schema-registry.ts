@@ -208,6 +208,7 @@ export class SchemaRegistryImpl {
 
   async loadFromDirectory(schemasDir: string): Promise<void> {
     log.info({ schemasDir }, "loadFromDirectory start");
+    this.resolvedCache.clear();
 
     let entries: string[];
     try {
@@ -235,6 +236,7 @@ export class SchemaRegistryImpl {
   }
 
   loadBundled(schemas: Array<NoteSchema | FolderSchema>): void {
+    this.resolvedCache.clear();
     for (const schema of schemas) {
       if (schema.type === "note") {
         // User schemas win — only register if not already present

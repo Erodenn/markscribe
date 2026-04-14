@@ -16,6 +16,8 @@ import { escapeRegex, expandTemplateVars, buildTemplateContext, evalCondition } 
 const log = createChildLog({ service: "NoteSchemaEngine" });
 
 export class NoteSchemaEngineImpl {
+  private readonly regexCache = new Map<string, RegExp>();
+
   constructor(private readonly vault: VaultService) {}
 
   /**
@@ -95,6 +97,15 @@ export class NoteSchemaEngineImpl {
   // Private helpers
   // ==========================================================================
 
+  private getCachedRegex(pattern: string): RegExp {
+    let re = this.regexCache.get(pattern);
+    if (!re) {
+      re = new RegExp(pattern);
+      this.regexCache.set(pattern, re);
+    }
+    return re;
+  }
+
   private checkField(
     fieldName: string,
     fieldDef: SchemaField,
@@ -147,7 +158,7 @@ export class NoteSchemaEngineImpl {
     if (!typeOk) return checks;
 
     if (fieldDef.format && typeof value === "string") {
-      const formatRe = new RegExp(fieldDef.format);
+      const formatRe = this.getCachedRegex(fieldDef.format);
       const formatOk = formatRe.test(value);
       checks.push({
         name: `field_${fieldName}_format`,
@@ -212,7 +223,7 @@ export class NoteSchemaEngineImpl {
 
     if ("atLeastOne" in constraint) {
       const list = value as unknown[];
-      const re = new RegExp(constraint.atLeastOne.matches);
+      const re = this.getCachedRegex(constraint.atLeastOne.matches);
       const pass = Array.isArray(list) && list.some((item) => re.test(String(item)));
       return {
         name: `field_${fieldName}_atLeastOne`,
@@ -225,7 +236,7 @@ export class NoteSchemaEngineImpl {
 
     if ("allMatch" in constraint) {
       const list = value as unknown[];
-      const re = new RegExp(constraint.allMatch);
+      const re = this.getCachedRegex(constraint.allMatch);
       const pass = Array.isArray(list) && list.every((item) => re.test(String(item)));
       return {
         name: `field_${fieldName}_allMatch`,
@@ -259,7 +270,7 @@ export class NoteSchemaEngineImpl {
     }
 
     if ("pattern" in constraint) {
-      const re = new RegExp(constraint.pattern);
+      const re = this.getCachedRegex(constraint.pattern);
       const pass = typeof value === "string" && re.test(value);
       return {
         name: `field_${fieldName}_pattern`,

@@ -10,6 +10,7 @@ import { walkVaultFiles } from "../utils.js";
 
 const log = createChildLog({ service: "SearchService" });
 
+const READ_CONCURRENCY = 20;
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const DEFAULT_EXCERPT_CHARS = 80;
@@ -115,42 +116,52 @@ export class SearchServiceImpl implements SearchService {
       frontmatter: Record<string, unknown>;
     };
 
+    // Read all notes with bounded concurrency
     const docs: DocData[] = [];
 
-    for (const notePath of allPaths) {
-      let note;
-      try {
-        note = await this.vault.readNote(notePath);
-      } catch {
-        log.debug({ path: notePath }, "search: skipping unreadable note");
-        continue;
+    for (let i = 0; i < allPaths.length; i += READ_CONCURRENCY) {
+      const batch = allPaths.slice(i, i + READ_CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(async (notePath) => {
+          try {
+            return { note: await this.vault.readNote(notePath), path: notePath };
+          } catch {
+            log.debug({ path: notePath }, "search: skipping unreadable note");
+            return null;
+          }
+        }),
+      );
+
+      for (const result of batchResults) {
+        if (!result) continue;
+        const { note, path: notePath } = result;
+
+        const contentText = note.content;
+        const contentTokens = searchContent ? tokenize(contentText) : [];
+        const contentTf = searchContent ? buildTermFreq(contentTokens) : new Map<string, number>();
+
+        let frontmatterText = "";
+        let frontmatterTokens: string[] = [];
+        let frontmatterTf = new Map<string, number>();
+
+        if (searchFrontmatterOpt) {
+          frontmatterText = this.frontmatterToText(note.frontmatter);
+          frontmatterTokens = tokenize(frontmatterText);
+          frontmatterTf = buildTermFreq(frontmatterTokens);
+        }
+
+        const combinedTokens = [...contentTokens, ...frontmatterTokens];
+        const combinedTf = this.mergeTf(contentTf, frontmatterTf);
+
+        docs.push({
+          path: notePath,
+          tokens: combinedTokens,
+          tf: combinedTf,
+          contentText,
+          frontmatterText,
+          frontmatter: note.frontmatter,
+        });
       }
-
-      const contentText = note.content;
-      const contentTokens = searchContent ? tokenize(contentText) : [];
-      const contentTf = searchContent ? buildTermFreq(contentTokens) : new Map<string, number>();
-
-      let frontmatterText = "";
-      let frontmatterTokens: string[] = [];
-      let frontmatterTf = new Map<string, number>();
-
-      if (searchFrontmatterOpt) {
-        frontmatterText = this.frontmatterToText(note.frontmatter);
-        frontmatterTokens = tokenize(frontmatterText);
-        frontmatterTf = buildTermFreq(frontmatterTokens);
-      }
-
-      const combinedTokens = [...contentTokens, ...frontmatterTokens];
-      const combinedTf = this.mergeTf(contentTf, frontmatterTf);
-
-      docs.push({
-        path: notePath,
-        tokens: combinedTokens,
-        tf: combinedTf,
-        contentText,
-        frontmatterText,
-        frontmatter: note.frontmatter,
-      });
     }
 
     if (docs.length === 0) {
@@ -248,29 +259,38 @@ export class SearchServiceImpl implements SearchService {
     const allPaths = await this.collectPaths();
     const results: SearchResult[] = [];
 
-    for (const notePath of allPaths) {
-      let note;
-      try {
-        note = await this.vault.readNote(notePath);
-      } catch {
-        log.debug({ path: notePath }, "searchByFrontmatter: skipping unreadable note");
-        continue;
+    for (let i = 0; i < allPaths.length; i += READ_CONCURRENCY) {
+      const batch = allPaths.slice(i, i + READ_CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(async (notePath) => {
+          try {
+            return { note: await this.vault.readNote(notePath), path: notePath };
+          } catch {
+            log.debug({ path: notePath }, "searchByFrontmatter: skipping unreadable note");
+            return null;
+          }
+        }),
+      );
+
+      for (const result of batchResults) {
+        if (!result) continue;
+        const { note, path: notePath } = result;
+
+        const fieldValue = note.frontmatter[field];
+        const matches = this.matchesOperator(fieldValue, value, operator);
+
+        if (!matches) continue;
+
+        const fieldStr = fieldValue !== undefined ? String(fieldValue) : "";
+        const excerpt = `${field}: ${fieldStr}`;
+
+        results.push({
+          path: notePath,
+          score: 1,
+          excerpt,
+          matchedFields: [field],
+        });
       }
-
-      const fieldValue = note.frontmatter[field];
-      const matches = this.matchesOperator(fieldValue, value, operator);
-
-      if (!matches) continue;
-
-      const fieldStr = fieldValue !== undefined ? String(fieldValue) : "";
-      const excerpt = `${field}: ${fieldStr}`;
-
-      results.push({
-        path: notePath,
-        score: 1,
-        excerpt,
-        matchedFields: [field],
-      });
     }
 
     log.info(

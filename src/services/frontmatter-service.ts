@@ -58,7 +58,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
     log.info({ path: notePath, merge, fieldCount: Object.keys(fields).length }, "updateFields");
 
     const note = await this.vault.readNote(notePath);
-    const { frontmatter, content } = this.parse(note.raw);
+    const { frontmatter, content } = note;
 
     const updatedFrontmatter = merge ? { ...frontmatter, ...fields } : { ...fields };
 
@@ -73,7 +73,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
     log.info({ path: notePath, operation, tagCount: tags?.length }, "manageTags");
 
     const note = await this.vault.readNote(notePath);
-    const { frontmatter, content } = this.parse(note.raw);
+    const { frontmatter, content } = note;
 
     const yamlTags = this.extractYamlTags(frontmatter);
     const inlineTags = this.extractInlineTags(content);

@@ -1,7 +1,6 @@
 import path from "node:path";
 import type {
   SchemaEngine,
-  Schema,
   SchemaInfo,
   NoteSchema,
   FolderSchema,
@@ -11,6 +10,7 @@ import type {
   AreaValidation,
   VaultValidation,
   VaultService,
+  ParsedNote,
 } from "../types.js";
 import { createChildLog } from "../vaultscribe-log.js";
 import { expandHubPattern } from "../utils.js";
@@ -19,9 +19,6 @@ import { bundledSchemas } from "../bundled-schemas/index.js";
 import { NoteSchemaEngineImpl } from "./note-schema-engine.js";
 import { FolderSchemaEngineImpl } from "./folder-schema-engine.js";
 import { ConventionCascadeImpl } from "./convention-cascade.js";
-
-// Re-export for backwards compatibility (create-note-tool imports from here)
-export { expandTemplateVars, buildTemplateContext } from "../utils.js";
 
 const log = createChildLog({ service: "SchemaEngine" });
 
@@ -40,7 +37,7 @@ export class SchemaEngineImpl implements SchemaEngine {
     this.vault = vaultService;
     this.registry = new SchemaRegistryImpl();
     this.noteEngine = new NoteSchemaEngineImpl(vaultService);
-    this.folderEngine = new FolderSchemaEngineImpl(vaultService, this.registry, this.noteEngine);
+    this.folderEngine = new FolderSchemaEngineImpl(vaultService);
     this.cascade = new ConventionCascadeImpl(vaultService, this.registry);
     log.info("SchemaEngine initialized");
   }
@@ -89,14 +86,6 @@ export class SchemaEngineImpl implements SchemaEngine {
   }
 
   // ==========================================================================
-  // Legacy API — getSchemaForPath (no longer used internally, kept for interface)
-  // ==========================================================================
-
-  getSchemaForPath(_notePath: string): Schema | null {
-    return null;
-  }
-
-  // ==========================================================================
   // Note validation
   // ==========================================================================
 
@@ -131,7 +120,7 @@ export class SchemaEngineImpl implements SchemaEngine {
     return this.folderEngine.validateFolder(
       folderPath,
       folderSchema,
-      (p) => this.lintNote(p),
+      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote),
     );
   }
 
@@ -139,7 +128,7 @@ export class SchemaEngineImpl implements SchemaEngine {
     return this.folderEngine.validateArea(
       areaPath,
       this.cascade,
-      (p) => this.lintNote(p),
+      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote),
       (folderPath) => this.cascade.getForFolder(folderPath)?.folderSchema ?? null,
     );
   }
@@ -148,19 +137,21 @@ export class SchemaEngineImpl implements SchemaEngine {
     log.info("validateVault start");
     await this.cascade.discover(); // refresh
 
-    const folders: Record<string, FolderValidation> = {};
-    const summary = { total: 0, passed: 0, failed: 0, skipped: 0 };
+    const areaResult = await this.folderEngine.validateArea(
+      "",
+      this.cascade,
+      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote),
+      (folderPath) => this.cascade.getForFolder(folderPath)?.folderSchema ?? null,
+    );
 
-    await this.walkAllDirectories("", folders, summary);
-
-    const pass = summary.failed === 0;
-    log.info({ ...summary, pass }, "validateVault complete");
+    const pass = areaResult.summary.failed === 0;
+    log.info({ ...areaResult.summary, pass }, "validateVault complete");
 
     return {
       pass,
       conventionSources: this.cascade.getAllSources(),
-      folders,
-      summary,
+      folders: areaResult.folders,
+      summary: areaResult.summary,
     };
   }
 
@@ -188,6 +179,20 @@ export class SchemaEngineImpl implements SchemaEngine {
   // Private helpers
   // ==========================================================================
 
+  private async lintNoteWithPreRead(notePath: string, preReadNote?: ParsedNote): Promise<LintResult> {
+    if (preReadNote) {
+      let schema: NoteSchema | null = null;
+      if (typeof preReadNote.frontmatter.schema === "string") {
+        schema = this.registry.getNoteSchema(preReadNote.frontmatter.schema);
+      }
+      if (!schema) {
+        schema = this.resolveNoteSchema(notePath);
+      }
+      return this.noteEngine.lintNote(notePath, schema, preReadNote);
+    }
+    return this.lintNote(notePath);
+  }
+
   private isLikelyHub(notePath: string, folderSchema: FolderSchema): boolean {
     if (!folderSchema.hub?.detection) return false;
     const folderName = path.basename(path.dirname(notePath.replace(/\\/g, "/")));
@@ -202,48 +207,4 @@ export class SchemaEngineImpl implements SchemaEngine {
     return false;
   }
 
-  private async walkAllDirectories(
-    dirPath: string,
-    folders: Record<string, FolderValidation>,
-    summary: { total: number; passed: number; failed: number; skipped: number },
-  ): Promise<void> {
-    let listing;
-    try {
-      listing = await this.vault.listDirectory(dirPath);
-    } catch (err) {
-      log.warn({ dirPath, err }, "walkAllDirectories: could not list directory");
-      return;
-    }
-
-    const convention = this.cascade.getForFolder(dirPath);
-    if (convention) {
-      const folderResult = await this.folderEngine.validateFolder(
-        dirPath,
-        convention.folderSchema,
-        (p) => this.lintNote(p),
-      );
-      folders[dirPath] = folderResult;
-      summary.total++;
-
-      if (folderResult.folderType === "supplemental") {
-        summary.skipped++;
-      } else if (
-        folderResult.folderType === "unclassified" &&
-        Object.keys(folderResult.notes).length === 0 &&
-        folderResult.structural.length === 0
-      ) {
-        summary.skipped++;
-      } else if (folderResult.pass) {
-        summary.passed++;
-      } else {
-        summary.failed++;
-      }
-    }
-
-    for (const entry of listing.entries) {
-      if (entry.type === "directory") {
-        await this.walkAllDirectories(entry.path, folders, summary);
-      }
-    }
-  }
 }

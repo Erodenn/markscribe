@@ -1,4 +1,3 @@
-import fs from "node:fs/promises";
 import { z } from "zod";
 import type { ToolHandler, Services, ToolResponse, LintResult } from "../types.js";
 import { expandTemplateVars, buildTemplateContext } from "../utils.js";
@@ -55,8 +54,8 @@ function makeCreateNoteTool(services: Services): ToolHandler {
       log.info({ notePath, explicitSchema }, "create_note called");
 
       try {
-        const absolutePath = services.vault.resolvePath(notePath);
-        await fs.access(absolutePath);
+        await services.vault.readNote(notePath);
+        // If readNote succeeds, file already exists
         return {
           content: [
             {
@@ -67,7 +66,11 @@ function makeCreateNoteTool(services: Services): ToolHandler {
           isError: true,
         };
       } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        // ENOENT = file doesn't exist, which is what we want — proceed
+        // "Path not allowed" = path filter blocks it — writeNote will also fail, proceed
+        const code = (err as NodeJS.ErrnoException).code;
+        const isPathError = err instanceof Error && err.message.includes("Path not allowed");
+        if (code !== "ENOENT" && !isPathError) {
           log.error({ err, notePath }, "create_note: pre-existence check failed");
           return {
             content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
@@ -95,7 +98,7 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         }
         resolvedSchemaName = explicitSchema;
       } else {
-        const matchedSchema = services.schema.getSchemaForPath(notePath);
+        const matchedSchema = services.schema.resolveNoteSchema(notePath);
         resolvedSchemaName = matchedSchema?.name ?? null;
       }
 

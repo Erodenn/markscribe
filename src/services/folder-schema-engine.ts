@@ -16,8 +16,6 @@ import {
   extractWikilinkStems,
   expandHubPattern,
 } from "../utils.js";
-import type { NoteSchemaEngineImpl } from "./note-schema-engine.js";
-import type { SchemaRegistryImpl } from "./schema-registry.js";
 import type { ConventionCascadeImpl } from "./convention-cascade.js";
 
 const log = createChildLog({ service: "FolderSchemaEngine" });
@@ -45,11 +43,7 @@ type StructuralChecker = (ctx: StructuralCheckContext) => Promise<Check>;
 export class FolderSchemaEngineImpl {
   private readonly checkers: Record<string, StructuralChecker>;
 
-  constructor(
-    private readonly vault: VaultService,
-    private readonly _registry: SchemaRegistryImpl,
-    private readonly _noteEngine: NoteSchemaEngineImpl,
-  ) {
+  constructor(private readonly vault: VaultService) {
     this.checkers = {
       hubCoversChildren: (ctx) => this.checkHubCoversChildren(ctx),
       noOrphansInFolder: (ctx) => this.checkNoOrphansInFolder(ctx),
@@ -67,7 +61,7 @@ export class FolderSchemaEngineImpl {
   async validateFolder(
     folderPath: string,
     folderSchema: FolderSchema | null,
-    lintNoteFn: (notePath: string) => Promise<import("../types.js").LintResult>,
+    lintNoteFn: (notePath: string, preReadNote?: ParsedNote) => Promise<import("../types.js").LintResult>,
   ): Promise<FolderValidation> {
     log.info({ path: folderPath, schema: folderSchema?.name ?? null }, "validateFolder start");
 
@@ -105,9 +99,19 @@ export class FolderSchemaEngineImpl {
       };
     }
 
+    // Pre-read all notes (used by both lint and structural checks)
+    const notesMap = new Map<string, ParsedNote>();
+    for (const f of mdFiles) {
+      try {
+        notesMap.set(f, await this.vault.readNote(f));
+      } catch {
+        // skip unreadable
+      }
+    }
+
     const notes: Record<string, import("../types.js").LintResult> = {};
     for (const notePath of mdFiles) {
-      notes[notePath] = await lintNoteFn(notePath);
+      notes[notePath] = await lintNoteFn(notePath, notesMap.get(notePath));
     }
 
     let structural: Check[] = [];
@@ -116,20 +120,11 @@ export class FolderSchemaEngineImpl {
       folderSchema?.structural &&
       folderSchema.structural.length > 0
     ) {
-      // Pre-read all notes for structural checks
-      const notesMap = new Map<string, ParsedNote>();
-      for (const f of mdFiles) {
-        try {
-          notesMap.set(f, await this.vault.readNote(f));
-        } catch {
-          // skip unreadable
-        }
-      }
-
       const { hubPath, hubContent, hubError } = await this.detectHub(
         mdFiles,
         folderName,
         folderSchema,
+        notesMap,
       );
 
       if (hubError) {
@@ -167,7 +162,7 @@ export class FolderSchemaEngineImpl {
   async validateArea(
     areaPath: string,
     cascade: ConventionCascadeImpl | null,
-    lintNoteFn: (notePath: string) => Promise<import("../types.js").LintResult>,
+    lintNoteFn: (notePath: string, preReadNote?: ParsedNote) => Promise<import("../types.js").LintResult>,
     getSchemaForFolder: (folderPath: string) => FolderSchema | null,
   ): Promise<AreaValidation> {
     log.info({ path: areaPath }, "validateArea start");
@@ -220,6 +215,7 @@ export class FolderSchemaEngineImpl {
     mdFiles: string[],
     folderName: string,
     schema: FolderSchema,
+    notesMap?: Map<string, ParsedNote>,
   ): Promise<{ hubPath: string | null; hubContent: string; hubError: string | null }> {
     const hubConfig = schema.hub;
     if (!hubConfig) return { hubPath: null, hubContent: "", hubError: null };
@@ -234,37 +230,23 @@ export class FolderSchemaEngineImpl {
         const targetName = expandHubPattern(rule.pattern, folderName);
         if (fileBasenames.has(targetName)) {
           const hubPath = fileBasenames.get(targetName)!;
-          let hubContent = "";
-          try {
-            const note = await this.vault.readNote(hubPath);
-            hubContent = note.content;
-          } catch {
-            // hub exists but can't be read
-          }
+          const note = notesMap?.get(hubPath);
+          const hubContent = note?.content ?? "";
           return { hubPath, hubContent, hubError: null };
         }
       } else if ("fallback" in rule) {
         const candidates: string[] = [];
         for (const filePath of mdFiles) {
-          try {
-            const note = await this.vault.readNote(filePath);
-            if (evalCondition(rule.fallback, note.frontmatter)) {
-              candidates.push(filePath);
-            }
-          } catch {
-            // skip unreadable
+          const note = notesMap?.get(filePath);
+          if (note && evalCondition(rule.fallback, note.frontmatter)) {
+            candidates.push(filePath);
           }
         }
 
         if (candidates.length === 1) {
           const hubPath = candidates[0];
-          let hubContent = "";
-          try {
-            const note = await this.vault.readNote(hubPath);
-            hubContent = note.content;
-          } catch {
-            // hub exists but can't be read
-          }
+          const note = notesMap?.get(hubPath);
+          const hubContent = note?.content ?? "";
           return { hubPath, hubContent, hubError: null };
         }
 
@@ -520,7 +502,7 @@ export class FolderSchemaEngineImpl {
     dirPath: string,
     folders: Record<string, FolderValidation>,
     summary: { total: number; passed: number; failed: number; skipped: number },
-    lintNoteFn: (notePath: string) => Promise<import("../types.js").LintResult>,
+    lintNoteFn: (notePath: string, preReadNote?: ParsedNote) => Promise<import("../types.js").LintResult>,
     getSchemaForFolder: (folderPath: string) => FolderSchema | null,
   ): Promise<void> {
     let listing;

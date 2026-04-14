@@ -267,22 +267,6 @@ export interface SearchService {
 // SchemaEngine
 // ============================================================================
 
-/** In-memory compiled representation of a YAML schema file */
-export interface Schema {
-  /** Unique identifier from schema YAML */
-  name: string;
-  /** Human-readable description */
-  description: string;
-  /** Scope rules */
-  scope: SchemaScope;
-  /** Frontmatter field definitions */
-  frontmatter: SchemaFrontmatter;
-  /** Content validation rules */
-  content: SchemaContent;
-  /** Folder-level configuration (optional) */
-  folders?: SchemaFolders;
-}
-
 export interface SchemaScope {
   /** Vault-relative path prefixes this schema governs */
   paths: string[];
@@ -566,9 +550,6 @@ export interface SchemaEngine {
 
   /** Discover _conventions.md notes and resolve cascade */
   discoverConventions(): Promise<void>;
-
-  /** Resolve which schema applies to a path (longest prefix wins) — legacy */
-  getSchemaForPath(notePath: string): Schema | null;
 
   /** Resolve the note schema for a given note path (3-step resolution) */
   resolveNoteSchema(notePath: string): NoteSchema | null;
