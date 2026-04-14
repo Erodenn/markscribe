@@ -524,8 +524,6 @@ export interface AreaValidation {
   path: string;
   /** Whether all folders passed */
   pass: boolean;
-  /** Which schema was applied */
-  schema: string | null;
   /** Per-folder results keyed by vault-relative path */
   folders: Record<string, FolderValidation>;
   summary: {
@@ -571,6 +569,9 @@ export interface SchemaEngine {
 
   /** List loaded schemas with summary info */
   listSchemas(): SchemaInfo[];
+
+  /** Clear all state and reload schemas + conventions from disk */
+  refresh(): Promise<void>;
 }
 
 // ============================================================================

@@ -16,10 +16,10 @@ const CreateNoteSchema = z.object({
     .record(z.string(), z.unknown())
     .optional()
     .describe("Frontmatter overrides merged on top of template defaults"),
-  schema: z
+  noteSchema: z
     .string()
     .optional()
-    .describe("Explicit schema name. If omitted, auto-detected from path via scope rules"),
+    .describe("Explicit note schema name. If omitted, resolved from the convention cascade for the note's folder"),
 });
 
 function makeCreateNoteTool(services: Services): ToolHandler {
@@ -27,7 +27,7 @@ function makeCreateNoteTool(services: Services): ToolHandler {
     name: "create_note",
     description: [
       "Create a new note at the given vault-relative path.",
-      "Automatically resolves the applicable schema from the path and applies its frontmatter template.",
+      "Automatically resolves the applicable schema from the convention cascade and applies its frontmatter template.",
       "Frontmatter overrides are merged on top of template defaults.",
       "If no schema matches, the note is created with the provided frontmatter as-is.",
       "Returns the created note path, final frontmatter, and lint result (null when no schema applied).",
@@ -44,7 +44,7 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         notePath = parsed.path;
         content = parsed.content;
         fmOverrides = parsed.frontmatter;
-        explicitSchema = parsed.schema;
+        explicitSchema = parsed.noteSchema;
       } catch (err) {
         return {
           content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
@@ -52,6 +52,7 @@ function makeCreateNoteTool(services: Services): ToolHandler {
         };
       }
       log.info({ notePath, explicitSchema }, "create_note called");
+      await services.schema.refresh();
 
       try {
         await services.vault.readNote(notePath);
@@ -83,14 +84,15 @@ function makeCreateNoteTool(services: Services): ToolHandler {
 
       if (explicitSchema !== undefined) {
         const knownSchemas = services.schema.listSchemas();
-        const found = knownSchemas.find((s) => s.name === explicitSchema);
+        const noteSchemas = knownSchemas.filter((s) => s.type === "note");
+        const found = noteSchemas.find((s) => s.name === explicitSchema);
         if (!found) {
-          log.error({ explicitSchema }, "create_note: named schema not found");
+          log.error({ explicitSchema }, "create_note: note schema not found");
           return {
             content: [
               {
                 type: "text",
-                text: `Schema "${explicitSchema}" not found. Available schemas: ${knownSchemas.map((s) => s.name).join(", ") || "(none)"}`,
+                text: `Note schema "${explicitSchema}" not found. Available note schemas: ${noteSchemas.map((s) => s.name).join(", ") || "(none)"}`,
               },
             ],
             isError: true,

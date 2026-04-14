@@ -68,8 +68,10 @@ export class FolderSchemaEngineImpl {
     const listing = await this.vault.listDirectory(folderPath);
     const folderName = path.basename(folderPath) || folderPath;
 
+    // Exclude _conventions.md — it's a cascade binding, not a content note
+    const CONVENTIONS_FILENAME = "_conventions.md";
     const mdFiles = listing.entries
-      .filter((e) => e.type === "file" && e.name.endsWith(".md"))
+      .filter((e) => e.type === "file" && e.name.endsWith(".md") && e.name !== CONVENTIONS_FILENAME)
       .map((e) => e.path);
     const subDirs = listing.entries.filter((e) => e.type === "directory").map((e) => e.path);
 
@@ -178,7 +180,6 @@ export class FolderSchemaEngineImpl {
     return {
       path: areaPath,
       pass,
-      schema: null,
       folders,
       summary,
     };

@@ -161,42 +161,6 @@ const ZodFolderSchemaRaw = z.object({
 // Legacy schema Zod validator (scope-based, pre-refactor)
 // ============================================================================
 
-export const ZodSchemaFolders = z.object({
-  classification: z
-    .object({
-      supplemental: z.array(z.string()).default([]),
-      skip: z.array(z.string()).default([]),
-    })
-    .default({ supplemental: [], skip: [] }),
-  hub: z
-    .object({
-      detection: z.array(ZodHubDetectionRule).default([]),
-      required: z.boolean().default(false),
-    })
-    .optional(),
-  structural: z.array(ZodStructuralRule).optional(),
-});
-
-export const ZodLegacySchemaRaw = z.object({
-  name: z.string().min(1),
-  description: z.string(),
-  scope: z.object({
-    paths: z.array(z.string()).min(1),
-    exclude: z.array(z.string()).default([]),
-  }),
-  frontmatter: z
-    .object({
-      fields: z.record(z.string(), ZodSchemaField).default({}),
-    })
-    .default({ fields: {} }),
-  content: z
-    .object({
-      rules: z.array(ZodContentRule).default([]),
-    })
-    .default({ rules: [] }),
-  folders: ZodSchemaFolders.optional(),
-});
-
 // ============================================================================
 // SchemaRegistryImpl
 // ============================================================================
