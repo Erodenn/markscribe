@@ -53,3 +53,5 @@ pnpm-debug.log*
 # Claude Code
 .claude/
 CLAUDE.md
+.mcp.json
+Vault Scribe Test Vault/
