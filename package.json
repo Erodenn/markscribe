@@ -24,8 +24,24 @@
     "conventions",
     "schema"
   ],
-  "author": "",
+  "author": "Owen Sterling",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Erodenn/vaultscribe.git"
+  },
+  "homepage": "https://github.com/Erodenn/vaultscribe#readme",
+  "bugs": {
+    "url": "https://github.com/Erodenn/vaultscribe/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "gray-matter": "^4.0.3",

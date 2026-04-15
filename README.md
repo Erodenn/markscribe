@@ -77,3 +77,7 @@ npm test          # vitest
 npm run lint      # eslint
 npm run build     # tsc
 ```
+
+## Acknowledgements
+
+Built with [Claude Code](https://github.com/anthropics/claude-code).
