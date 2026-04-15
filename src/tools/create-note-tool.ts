@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ToolHandler, Services, ToolResponse, LintResult } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse, LintResult } from "../types.js";
+import { requireServices } from "./index.js";
 import { expandTemplateVars, buildTemplateContext } from "../utils.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
@@ -22,7 +23,7 @@ const CreateNoteSchema = z.object({
     .describe("Explicit note schema name. If omitted, resolved from the convention cascade for the note's folder"),
 });
 
-function makeCreateNoteTool(services: Services): ToolHandler {
+function makeCreateNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "create_note",
     description: [
@@ -35,6 +36,7 @@ function makeCreateNoteTool(services: Services): ToolHandler {
     ].join(" "),
     inputSchema: CreateNoteSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       let notePath: string;
       let content: string;
       let fmOverrides: Record<string, unknown> | undefined;
@@ -192,9 +194,9 @@ function makeCreateNoteTool(services: Services): ToolHandler {
 
 export function registerCreateNoteTool(
   registry: Map<string, ToolHandler>,
-  services: Services,
+  container: ServiceContainer,
 ): void {
-  const tools = [makeCreateNoteTool(services)];
+  const tools = [makeCreateNoteTool(container)];
 
   for (const tool of tools) {
     registry.set(tool.name, tool);

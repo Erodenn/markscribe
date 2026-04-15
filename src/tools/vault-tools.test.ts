@@ -31,7 +31,7 @@ async function writeFile(base: string, relPath: string, content: string): Promis
 
 function buildRegistry(services: Services): Map<string, ToolHandler> {
   const registry = new Map<string, ToolHandler>();
-  registerVaultTools(registry, services);
+  registerVaultTools(registry, { services }, null);
   return registry;
 }
 
@@ -273,7 +273,7 @@ describe("get_vault_stats tool", () => {
     brokenServices.vault = brokenVault;
 
     const brokenRegistry = new Map<string, ToolHandler>();
-    registerVaultTools(brokenRegistry, brokenServices);
+    registerVaultTools(brokenRegistry, { services: brokenServices }, null);
 
     const result = await callTool(brokenRegistry, "get_vault_stats", {});
     // get_vault_stats catches errors internally in the walk — may succeed with 0 notes

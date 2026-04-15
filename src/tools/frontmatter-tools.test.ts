@@ -33,7 +33,7 @@ async function writeFile(base: string, relPath: string, content: string): Promis
 
 function buildRegistry(services: Services): Map<string, ToolHandler> {
   const registry = new Map<string, ToolHandler>();
-  registerFrontmatterTools(registry, services);
+  registerFrontmatterTools(registry, { services });
   return registry;
 }
 

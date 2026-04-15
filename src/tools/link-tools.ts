@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ToolHandler, ToolResponse, Services } from "../types.js";
+import type { ToolHandler, ToolResponse, ServiceContainer } from "../types.js";
+import { requireServices } from "./index.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "link-tools" });
@@ -12,7 +13,7 @@ const GetBacklinksSchema = z.object({
   path: z.string().min(1, "path is required"),
 });
 
-function makeGetBacklinksTool(services: Services): ToolHandler {
+function makeGetBacklinksTool(container: ServiceContainer): ToolHandler {
   return {
     name: "get_backlinks",
     description:
@@ -20,6 +21,7 @@ function makeGetBacklinksTool(services: Services): ToolHandler {
     inputSchema: GetBacklinksSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path } = GetBacklinksSchema.parse(args);
         log.info({ path }, "get_backlinks called");
         const backlinks = await services.links.getBacklinks(path);
@@ -51,7 +53,7 @@ const FindUnlinkedMentionsSchema = z.object({
   path: z.string().min(1, "path is required"),
 });
 
-function makeFindUnlinkedMentionsTool(services: Services): ToolHandler {
+function makeFindUnlinkedMentionsTool(container: ServiceContainer): ToolHandler {
   return {
     name: "find_unlinked_mentions",
     description:
@@ -59,6 +61,7 @@ function makeFindUnlinkedMentionsTool(services: Services): ToolHandler {
     inputSchema: FindUnlinkedMentionsSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path } = FindUnlinkedMentionsSchema.parse(args);
         log.info({ path }, "find_unlinked_mentions called");
         const mentions = await services.links.findUnlinkedMentions(path);
@@ -90,7 +93,7 @@ const FindBrokenLinksSchema = z.object({
   scope: z.string().optional(),
 });
 
-function makeFindBrokenLinksTool(services: Services): ToolHandler {
+function makeFindBrokenLinksTool(container: ServiceContainer): ToolHandler {
   return {
     name: "find_broken_links",
     description:
@@ -98,6 +101,7 @@ function makeFindBrokenLinksTool(services: Services): ToolHandler {
     inputSchema: FindBrokenLinksSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { scope } = FindBrokenLinksSchema.parse(args);
         log.info({ scope }, "find_broken_links called");
         const brokenLinks = await services.links.findBrokenLinks(scope);
@@ -129,7 +133,7 @@ const FindOrphansSchema = z.object({
   scope: z.string().optional(),
 });
 
-function makeFindOrphansTool(services: Services): ToolHandler {
+function makeFindOrphansTool(container: ServiceContainer): ToolHandler {
   return {
     name: "find_orphans",
     description:
@@ -137,6 +141,7 @@ function makeFindOrphansTool(services: Services): ToolHandler {
     inputSchema: FindOrphansSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { scope } = FindOrphansSchema.parse(args);
         log.info({ scope }, "find_orphans called");
         const orphans = await services.links.findOrphans(scope);
@@ -164,12 +169,15 @@ function makeFindOrphansTool(services: Services): ToolHandler {
 // Registration
 // ============================================================================
 
-export function registerLinkTools(registry: Map<string, ToolHandler>, services: Services): void {
+export function registerLinkTools(
+  registry: Map<string, ToolHandler>,
+  container: ServiceContainer,
+): void {
   const tools = [
-    makeGetBacklinksTool(services),
-    makeFindUnlinkedMentionsTool(services),
-    makeFindBrokenLinksTool(services),
-    makeFindOrphansTool(services),
+    makeGetBacklinksTool(container),
+    makeFindUnlinkedMentionsTool(container),
+    makeFindBrokenLinksTool(container),
+    makeFindOrphansTool(container),
   ];
 
   for (const tool of tools) {

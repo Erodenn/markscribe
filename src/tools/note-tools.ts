@@ -1,6 +1,7 @@
 import path from "node:path";
 import { z } from "zod";
-import type { ToolHandler, ToolResponse, Services } from "../types.js";
+import type { ToolHandler, ToolResponse, ServiceContainer } from "../types.js";
+import { requireServices } from "./index.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "note-tools" });
@@ -13,12 +14,13 @@ const ReadNoteSchema = z.object({
   path: z.string().min(1, "path is required"),
 });
 
-function makeReadNoteTool(services: Services): ToolHandler {
+function makeReadNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "read_note",
     description: "Read a note with parsed frontmatter and body content.",
     inputSchema: ReadNoteSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       const { path } = ReadNoteSchema.parse(args);
       log.info({ path }, "read_note called");
       try {
@@ -60,13 +62,14 @@ const WriteNoteSchema = z.object({
   mode: WriteModeSchema.optional().default("overwrite"),
 });
 
-function makeWriteNoteTool(services: Services): ToolHandler {
+function makeWriteNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "write_note",
     description:
       "Create or update a note. mode can be 'overwrite' (default), 'append', or 'prepend'.",
     inputSchema: WriteNoteSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       const { path, content, frontmatter, mode } = WriteNoteSchema.parse(args);
       log.info({ path, mode }, "write_note called");
       try {
@@ -105,12 +108,13 @@ const PatchNoteSchema = z.object({
   replaceAll: z.boolean().optional().default(false),
 });
 
-function makePatchNoteTool(services: Services): ToolHandler {
+function makePatchNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "patch_note",
     description: "Replace text within a note. Set replaceAll to true to replace every occurrence.",
     inputSchema: PatchNoteSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       const { path, oldString, newString, replaceAll } = PatchNoteSchema.parse(args);
       log.info({ path, replaceAll }, "patch_note called");
       try {
@@ -161,12 +165,13 @@ const DeleteNoteSchema = z.object({
   confirmPath: z.string().min(1, "confirmPath is required"),
 });
 
-function makeDeleteNoteTool(services: Services): ToolHandler {
+function makeDeleteNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "delete_note",
     description: "Delete a note. confirmPath must match path exactly as a safety check.",
     inputSchema: DeleteNoteSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       const { path, confirmPath } = DeleteNoteSchema.parse(args);
       log.info({ path }, "delete_note called");
       try {
@@ -202,13 +207,14 @@ const MoveNoteSchema = z.object({
   overwrite: z.boolean().optional().default(false),
 });
 
-function makeMoveNoteTool(services: Services): ToolHandler {
+function makeMoveNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "move_note",
     description:
       "Move or rename a note within the vault. Set updateLinks to true to update all [[wikilinks]] referencing the old name. Errors if destination exists unless overwrite is true.",
     inputSchema: MoveNoteSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       const { oldPath, newPath, updateLinks, overwrite } = MoveNoteSchema.parse(args);
       log.info({ oldPath, newPath, updateLinks, overwrite }, "move_note called");
       try {
@@ -271,12 +277,13 @@ const ReadMultipleNotesSchema = z.object({
   paths: z.array(z.string()).min(1, "at least one path required").max(10, "max 10 paths"),
 });
 
-function makeReadMultipleNotesTool(services: Services): ToolHandler {
+function makeReadMultipleNotesTool(container: ServiceContainer): ToolHandler {
   return {
     name: "read_multiple_notes",
     description: "Batch read up to 10 notes at once. Returns each note or an error per path.",
     inputSchema: ReadMultipleNotesSchema,
     async handler(args): Promise<ToolResponse> {
+      const services = requireServices(container);
       const { paths } = ReadMultipleNotesSchema.parse(args);
       log.info({ count: paths.length }, "read_multiple_notes called");
       try {
@@ -305,14 +312,17 @@ function makeReadMultipleNotesTool(services: Services): ToolHandler {
 // Registration
 // ============================================================================
 
-export function registerNoteTools(registry: Map<string, ToolHandler>, services: Services): void {
+export function registerNoteTools(
+  registry: Map<string, ToolHandler>,
+  container: ServiceContainer,
+): void {
   const tools = [
-    makeReadNoteTool(services),
-    makeWriteNoteTool(services),
-    makePatchNoteTool(services),
-    makeDeleteNoteTool(services),
-    makeMoveNoteTool(services),
-    makeReadMultipleNotesTool(services),
+    makeReadNoteTool(container),
+    makeWriteNoteTool(container),
+    makePatchNoteTool(container),
+    makeDeleteNoteTool(container),
+    makeMoveNoteTool(container),
+    makeReadMultipleNotesTool(container),
   ];
 
   for (const tool of tools) {

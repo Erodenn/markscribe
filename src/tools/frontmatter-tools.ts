@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ToolHandler, Services, ToolResponse } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse } from "../types.js";
+import { requireServices } from "./index.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "frontmatter-tools" });
@@ -12,7 +13,7 @@ const GetFrontmatterSchema = z.object({
   path: z.string().describe("Vault-relative path to the note."),
 });
 
-function makeGetFrontmatterTool(services: Services): ToolHandler {
+function makeGetFrontmatterTool(container: ServiceContainer): ToolHandler {
   return {
     name: "get_frontmatter",
     description:
@@ -20,6 +21,7 @@ function makeGetFrontmatterTool(services: Services): ToolHandler {
     inputSchema: GetFrontmatterSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path: notePath } = GetFrontmatterSchema.parse(args);
         log.info({ notePath }, "get_frontmatter called");
         const note = await services.vault.readNote(notePath);
@@ -60,7 +62,7 @@ const UpdateFrontmatterSchema = z.object({
     .describe("If true (default), merge with existing frontmatter. If false, replace all fields."),
 });
 
-function makeUpdateFrontmatterTool(services: Services): ToolHandler {
+function makeUpdateFrontmatterTool(container: ServiceContainer): ToolHandler {
   return {
     name: "update_frontmatter",
     description:
@@ -68,6 +70,7 @@ function makeUpdateFrontmatterTool(services: Services): ToolHandler {
     inputSchema: UpdateFrontmatterSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path: notePath, fields, merge } = UpdateFrontmatterSchema.parse(args);
         log.info(
           { notePath, fieldCount: Object.keys(fields).length, merge },
@@ -114,7 +117,7 @@ const ManageTagsSchema = z.object({
     .describe('Tags to add or remove. Not required for "list" operation.'),
 });
 
-function makeManageTagsTool(services: Services): ToolHandler {
+function makeManageTagsTool(container: ServiceContainer): ToolHandler {
   return {
     name: "manage_tags",
     description:
@@ -122,6 +125,7 @@ function makeManageTagsTool(services: Services): ToolHandler {
     inputSchema: ManageTagsSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path: notePath, operation, tags } = ManageTagsSchema.parse(args);
         log.info({ notePath, operation, tagCount: tags?.length }, "manage_tags called");
         const result = await services.frontmatter.manageTags(notePath, operation, tags);
@@ -149,12 +153,12 @@ function makeManageTagsTool(services: Services): ToolHandler {
 
 export function registerFrontmatterTools(
   registry: Map<string, ToolHandler>,
-  services: Services,
+  container: ServiceContainer,
 ): void {
   const tools = [
-    makeGetFrontmatterTool(services),
-    makeUpdateFrontmatterTool(services),
-    makeManageTagsTool(services),
+    makeGetFrontmatterTool(container),
+    makeUpdateFrontmatterTool(container),
+    makeManageTagsTool(container),
   ];
 
   for (const tool of tools) {

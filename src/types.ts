@@ -41,6 +41,24 @@ export interface Services {
   links: LinkEngine;
 }
 
+/**
+ * Mutable wrapper around Services so tool handler closures see vault switches.
+ * Tools close over the container — on switch_vault, `services` is reassigned.
+ */
+export interface ServiceContainer {
+  services: Services | null;
+}
+
+// ============================================================================
+// Global Config (~/.vaultscribe/config.yaml)
+// ============================================================================
+
+/** Named vault entries: alias → absolute path */
+export interface GlobalConfig {
+  vaults?: Record<string, string>;
+  default?: string;
+}
+
 // ============================================================================
 // PathFilter
 // ============================================================================

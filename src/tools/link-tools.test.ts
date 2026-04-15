@@ -34,7 +34,7 @@ function makeServices(vaultPath: string): Services {
 
 function makeRegistry(services: Services): Map<string, ToolHandler> {
   const registry = new Map<string, ToolHandler>();
-  registerLinkTools(registry, services);
+  registerLinkTools(registry, { services });
   return registry;
 }
 

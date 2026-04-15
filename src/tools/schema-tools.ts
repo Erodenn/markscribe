@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ToolHandler, Services, ToolResponse } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse } from "../types.js";
+import { requireServices } from "./index.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "schema-tools" });
@@ -12,7 +13,7 @@ const LintNoteSchema = z.object({
   path: z.string().describe("Vault-relative path to the note to validate."),
 });
 
-function makeLintNoteTool(services: Services): ToolHandler {
+function makeLintNoteTool(container: ServiceContainer): ToolHandler {
   return {
     name: "lint_note",
     description:
@@ -20,6 +21,7 @@ function makeLintNoteTool(services: Services): ToolHandler {
     inputSchema: LintNoteSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path: notePath } = LintNoteSchema.parse(args);
         log.info({ notePath }, "lint_note called");
         await services.schema.refresh();
@@ -50,7 +52,7 @@ const ValidateFolderSchema = z.object({
   path: z.string().describe("Vault-relative path to the folder to validate."),
 });
 
-function makeValidateFolderTool(services: Services): ToolHandler {
+function makeValidateFolderTool(container: ServiceContainer): ToolHandler {
   return {
     name: "validate_folder",
     description:
@@ -58,6 +60,7 @@ function makeValidateFolderTool(services: Services): ToolHandler {
     inputSchema: ValidateFolderSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path: folderPath } = ValidateFolderSchema.parse(args);
         log.info({ folderPath }, "validate_folder called");
         await services.schema.refresh();
@@ -88,7 +91,7 @@ const ValidateAreaSchema = z.object({
   path: z.string().describe("Vault-relative path to the area (subtree) to validate recursively."),
 });
 
-function makeValidateAreaTool(services: Services): ToolHandler {
+function makeValidateAreaTool(container: ServiceContainer): ToolHandler {
   return {
     name: "validate_area",
     description:
@@ -96,6 +99,7 @@ function makeValidateAreaTool(services: Services): ToolHandler {
     inputSchema: ValidateAreaSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { path: areaPath } = ValidateAreaSchema.parse(args);
         log.info({ areaPath }, "validate_area called");
         await services.schema.refresh();
@@ -124,7 +128,7 @@ function makeValidateAreaTool(services: Services): ToolHandler {
 
 const ListSchemasSchema = z.object({});
 
-function makeListSchemasTool(services: Services): ToolHandler {
+function makeListSchemasTool(container: ServiceContainer): ToolHandler {
   return {
     name: "list_schemas",
     description:
@@ -132,6 +136,7 @@ function makeListSchemasTool(services: Services): ToolHandler {
     inputSchema: ListSchemasSchema,
     async handler(_args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         log.info("list_schemas called");
         await services.schema.refresh();
         const schemas = services.schema.listSchemas();
@@ -156,7 +161,7 @@ function makeListSchemasTool(services: Services): ToolHandler {
 
 const ValidateVaultSchema = z.object({});
 
-function makeValidateVaultTool(services: Services): ToolHandler {
+function makeValidateVaultTool(container: ServiceContainer): ToolHandler {
   return {
     name: "validate_vault",
     description:
@@ -164,6 +169,7 @@ function makeValidateVaultTool(services: Services): ToolHandler {
     inputSchema: ValidateVaultSchema,
     async handler(_args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         log.info("validate_vault called");
         await services.schema.refresh();
         const result = await services.schema.validateVault();
@@ -189,13 +195,16 @@ function makeValidateVaultTool(services: Services): ToolHandler {
 // Registration
 // ============================================================================
 
-export function registerSchemaTools(registry: Map<string, ToolHandler>, services: Services): void {
+export function registerSchemaTools(
+  registry: Map<string, ToolHandler>,
+  container: ServiceContainer,
+): void {
   const tools = [
-    makeLintNoteTool(services),
-    makeValidateFolderTool(services),
-    makeValidateAreaTool(services),
-    makeValidateVaultTool(services),
-    makeListSchemasTool(services),
+    makeLintNoteTool(container),
+    makeValidateFolderTool(container),
+    makeValidateAreaTool(container),
+    makeValidateVaultTool(container),
+    makeListSchemasTool(container),
   ];
 
   for (const tool of tools) {

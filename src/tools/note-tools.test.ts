@@ -28,7 +28,7 @@ function makeServices(vault: VaultService): Services {
 
 function makeRegistry(services: Services): Map<string, ToolHandler> {
   const registry = new Map<string, ToolHandler>();
-  registerNoteTools(registry, services);
+  registerNoteTools(registry, { services });
   return registry;
 }
 

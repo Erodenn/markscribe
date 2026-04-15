@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ToolHandler, Services, ToolResponse } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse } from "../types.js";
+import { requireServices } from "./index.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
 const log = createChildLog({ module: "search-tools" });
@@ -36,7 +37,7 @@ const SearchNotesSchema = z.object({
     .describe("Maximum number of results to return. Omit for default limit."),
 });
 
-function makeSearchNotesTool(services: Services): ToolHandler {
+function makeSearchNotesTool(container: ServiceContainer): ToolHandler {
   return {
     name: "search_notes",
     description:
@@ -44,6 +45,7 @@ function makeSearchNotesTool(services: Services): ToolHandler {
     inputSchema: SearchNotesSchema,
     async handler(args): Promise<ToolResponse> {
       try {
+        const services = requireServices(container);
         const { query, scope, searchContent, searchFrontmatter, limit } =
           SearchNotesSchema.parse(args);
         log.info({ query, scope, searchContent, searchFrontmatter, limit }, "search_notes called");
@@ -72,8 +74,11 @@ function makeSearchNotesTool(services: Services): ToolHandler {
 // Registration
 // ============================================================================
 
-export function registerSearchTools(registry: Map<string, ToolHandler>, services: Services): void {
-  const tools = [makeSearchNotesTool(services)];
+export function registerSearchTools(
+  registry: Map<string, ToolHandler>,
+  container: ServiceContainer,
+): void {
+  const tools = [makeSearchNotesTool(container)];
 
   for (const tool of tools) {
     registry.set(tool.name, tool);
