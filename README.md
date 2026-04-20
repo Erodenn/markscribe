@@ -50,11 +50,9 @@ Create `~/.vaultscribe/config.yaml` to define named vaults:
 
 ```yaml
 vaults:
-  personal:
-    path: /path/to/personal/vault
-  work:
-    path: /path/to/work/vault
-defaultVault: personal
+  personal: /path/to/personal/vault
+  work: /path/to/work/vault
+default: personal
 ```
 
 Switch between vaults at runtime using the `switch_vault` tool.

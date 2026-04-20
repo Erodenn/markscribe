@@ -59,6 +59,14 @@ export interface GlobalConfig {
   default?: string;
 }
 
+/**
+ * Mutable wrapper around GlobalConfig so tool handler closures see add_vault mutations.
+ * Mirrors the ServiceContainer pattern.
+ */
+export interface ConfigHolder {
+  config: GlobalConfig | null;
+}
+
 // ============================================================================
 // PathFilter
 // ============================================================================

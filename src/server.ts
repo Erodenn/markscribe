@@ -7,7 +7,7 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { vaultscribeLog } from "./vaultscribe-log.js";
-import type { ToolHandler, ServiceContainer } from "./types.js";
+import type { ToolHandler, ServiceContainer, ConfigHolder } from "./types.js";
 import { registerTools } from "./tools/index.js";
 import { loadGlobalConfig } from "./global-config.js";
 import { buildServices } from "./build-services.js";
@@ -18,6 +18,7 @@ const SERVER_VERSION = "0.1.0";
 /**
  * Start the VaultScribe MCP server.
  * Vault path from CLI arg, or from ~/.vaultscribe/config.yaml.
+ * Starts gracefully with no vault — tools return instructional errors about add_vault.
  */
 export async function startServer(): Promise<void> {
   const cliVaultPath = process.argv[2];
@@ -25,20 +26,15 @@ export async function startServer(): Promise<void> {
   // Load global config for multi-vault support
   const globalConfig = await loadGlobalConfig();
 
-  // Determine initial vault path
+  // Mutable wrapper so add_vault mutations are visible to all tool closures
+  const holder: ConfigHolder = { config: globalConfig };
+
+  // Determine initial vault path: CLI arg takes priority, then config default
   let initialVaultPath: string | undefined;
   if (cliVaultPath) {
     initialVaultPath = cliVaultPath;
   } else if (globalConfig?.default && globalConfig.vaults?.[globalConfig.default]) {
     initialVaultPath = globalConfig.vaults[globalConfig.default];
-  }
-
-  if (!initialVaultPath && !globalConfig) {
-    vaultscribeLog.fatal(
-      "no vault path provided. Either pass a vault path as CLI argument, " +
-        "or create ~/.vaultscribe/config.yaml with named vaults",
-    );
-    process.exit(1);
   }
 
   // Build service container — tools close over this, services are swapped on vault switch
@@ -48,12 +44,14 @@ export async function startServer(): Promise<void> {
     vaultscribeLog.info({ vaultPath: initialVaultPath }, "starting vaultscribe server");
     container.services = await buildServices(initialVaultPath);
   } else {
-    vaultscribeLog.info("starting vaultscribe server with no active vault");
+    vaultscribeLog.info(
+      "starting vaultscribe server with no active vault — use add_vault to register one",
+    );
   }
 
-  // Build tool registry — tools reference `container` so they see vault switches
+  // Build tool registry — tools reference `container` and `holder` so they see mutations
   const registry = new Map<string, ToolHandler>();
-  registerTools(registry, container, globalConfig);
+  registerTools(registry, container, holder, cliVaultPath);
 
   const server = new Server(
     { name: SERVER_NAME, version: SERVER_VERSION },

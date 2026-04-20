@@ -1,8 +1,9 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import { z } from "zod";
-import type { ToolHandler, ServiceContainer, ToolResponse, GlobalConfig } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse, ConfigHolder } from "../types.js";
 import { requireServices } from "./index.js";
-import { resolveVaultPath } from "../global-config.js";
+import { resolveVaultPath, loadGlobalConfig, saveGlobalConfig } from "../global-config.js";
 import { buildServices } from "../build-services.js";
 import { createChildLog } from "../vaultscribe-log.js";
 
@@ -89,7 +90,8 @@ const ListVaultsSchema = z.object({});
 
 function makeListVaultsTool(
   container: ServiceContainer,
-  globalConfig: GlobalConfig | null,
+  holder: ConfigHolder,
+  cliVaultPath?: string,
 ): ToolHandler {
   return {
     name: "list_vaults",
@@ -99,6 +101,7 @@ function makeListVaultsTool(
     async handler(_args): Promise<ToolResponse> {
       try {
         log.info("list_vaults called");
+        const globalConfig = holder.config;
         const vaults = globalConfig?.vaults ?? {};
         const activeVaultPath = container.services?.vault.vaultPath ?? null;
 
@@ -107,6 +110,19 @@ function makeListVaultsTool(
           path: vaultPath,
           active: activeVaultPath !== null && activeVaultPath === path.resolve(vaultPath),
         }));
+
+        // If active vault came from CLI and isn't in config, show it as a synthetic entry
+        if (
+          cliVaultPath &&
+          activeVaultPath !== null &&
+          !entries.some((e) => e.active)
+        ) {
+          entries.push({
+            name: cliVaultPath,
+            path: activeVaultPath,
+            active: true,
+          });
+        }
 
         const result = {
           vaults: entries,
@@ -144,7 +160,8 @@ const SwitchVaultSchema = z.object({
 
 function makeSwitchVaultTool(
   container: ServiceContainer,
-  globalConfig: GlobalConfig | null,
+  holder: ConfigHolder,
+  cliVaultPath?: string,
 ): ToolHandler {
   return {
     name: "switch_vault",
@@ -156,9 +173,9 @@ function makeSwitchVaultTool(
         const { vault } = SwitchVaultSchema.parse(args);
         log.info({ vault }, "switch_vault called");
 
-        const resolvedPath = resolveVaultPath(vault, globalConfig);
+        const resolvedPath = resolveVaultPath(vault, holder.config);
         if (!resolvedPath) {
-          const available = Object.keys(globalConfig?.vaults ?? {});
+          const available = Object.keys(holder.config?.vaults ?? {});
           const hint =
             available.length > 0
               ? ` Available vaults: ${available.join(", ")}`
@@ -178,6 +195,10 @@ function makeSwitchVaultTool(
         const newServices = await buildServices(resolvedPath);
         container.services = newServices;
 
+        const message = cliVaultPath
+          ? `Switched to vault: ${resolvedPath} (overrides CLI arg for this session)`
+          : `Switched to vault: ${resolvedPath}`;
+
         log.info({ vault, resolvedPath }, "switch_vault complete");
         return {
           content: [
@@ -186,7 +207,7 @@ function makeSwitchVaultTool(
               text: JSON.stringify({
                 switched: true,
                 vault: resolvedPath,
-                message: `Switched to vault: ${resolvedPath}`,
+                message,
               }),
             },
           ],
@@ -203,19 +224,141 @@ function makeSwitchVaultTool(
 }
 
 // ============================================================================
+// add_vault
+// ============================================================================
+
+const AddVaultSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .describe("Alias name for the vault (e.g. 'work', 'personal')."),
+  path: z
+    .string()
+    .min(1)
+    .describe("Absolute path to the vault directory."),
+  setDefault: z
+    .boolean()
+    .optional()
+    .describe("Set this vault as the default. Auto-set if no default exists."),
+});
+
+function makeAddVaultTool(
+  container: ServiceContainer,
+  holder: ConfigHolder,
+  configPath?: string,
+): ToolHandler {
+  return {
+    name: "add_vault",
+    description:
+      "Register a new vault in the global config (~/.vaultscribe/config.yaml). " +
+      "Persists the vault alias and path to disk. Auto-sets as default if no default exists. " +
+      "If no vault is currently active, automatically switches to the new vault.",
+    inputSchema: AddVaultSchema,
+    async handler(args): Promise<ToolResponse> {
+      try {
+        const { name, path: vaultPath, setDefault } = AddVaultSchema.parse(args);
+        log.info({ name, vaultPath, setDefault }, "add_vault called");
+
+        // Validate path is absolute
+        if (!path.isAbsolute(vaultPath)) {
+          return {
+            content: [{ type: "text", text: `Path must be absolute. Received: ${vaultPath}` }],
+            isError: true,
+          };
+        }
+
+        // Validate directory exists
+        try {
+          const stat = await fs.stat(vaultPath);
+          if (!stat.isDirectory()) {
+            return {
+              content: [{ type: "text", text: `Path is not a directory: ${vaultPath}` }],
+              isError: true,
+            };
+          }
+        } catch {
+          return {
+            content: [{ type: "text", text: `Directory does not exist: ${vaultPath}` }],
+            isError: true,
+          };
+        }
+
+        // Re-read config from disk to avoid stale reads
+        const freshConfig = await loadGlobalConfig(configPath);
+        const config = freshConfig ?? { vaults: {}, default: undefined };
+        if (!config.vaults) {
+          config.vaults = {};
+        }
+
+        // Merge new vault entry
+        config.vaults[name] = vaultPath;
+
+        // Auto-set default if none exists, or if explicitly requested
+        if (setDefault || !config.default) {
+          config.default = name;
+        }
+
+        // Save to disk
+        await saveGlobalConfig(config, configPath);
+
+        // Update in-memory holder
+        holder.config = config;
+
+        // If no vault is currently active, auto-switch to the new vault
+        let autoSwitched = false;
+        if (!container.services) {
+          const newServices = await buildServices(vaultPath);
+          container.services = newServices;
+          autoSwitched = true;
+          log.info({ name, vaultPath }, "auto-switched to new vault");
+        }
+
+        log.info({ name, vaultPath, isDefault: config.default === name }, "add_vault complete");
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                added: true,
+                name,
+                path: vaultPath,
+                isDefault: config.default === name,
+                autoSwitched,
+                message: autoSwitched
+                  ? `Vault "${name}" added and activated.`
+                  : `Vault "${name}" added to config.`,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        log.error({ err }, "add_vault failed");
+        return {
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          isError: true,
+        };
+      }
+    },
+  };
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
 export function registerVaultTools(
   registry: Map<string, ToolHandler>,
   container: ServiceContainer,
-  globalConfig: GlobalConfig | null,
+  holder: ConfigHolder,
+  cliVaultPath?: string,
+  configPath?: string,
 ): void {
   const tools = [
     makeListDirectoryTool(container),
     makeGetVaultStatsTool(container),
-    makeListVaultsTool(container, globalConfig),
-    makeSwitchVaultTool(container, globalConfig),
+    makeListVaultsTool(container, holder, cliVaultPath),
+    makeSwitchVaultTool(container, holder, cliVaultPath),
+    makeAddVaultTool(container, holder, configPath),
   ];
 
   for (const tool of tools) {

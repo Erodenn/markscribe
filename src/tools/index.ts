@@ -1,4 +1,4 @@
-import type { ToolHandler, Services, ServiceContainer, GlobalConfig } from "../types.js";
+import type { ToolHandler, Services, ServiceContainer, ConfigHolder } from "../types.js";
 import { registerNoteTools } from "./note-tools.js";
 import { registerVaultTools } from "./vault-tools.js";
 import { registerFrontmatterTools } from "./frontmatter-tools.js";
@@ -13,7 +13,9 @@ import { registerLinkTools } from "./link-tools.js";
  */
 export function requireServices(container: ServiceContainer): Services {
   if (!container.services) {
-    throw new Error("No vault is active. Use the switch_vault tool to select a vault first.");
+    throw new Error(
+      "No vault is active. Use add_vault to register a vault, or switch_vault to activate one.",
+    );
   }
   return container.services;
 }
@@ -24,10 +26,12 @@ export function requireServices(container: ServiceContainer): Services {
 export function registerTools(
   registry: Map<string, ToolHandler>,
   container: ServiceContainer,
-  globalConfig: GlobalConfig | null,
+  holder: ConfigHolder,
+  cliVaultPath?: string,
+  configPath?: string,
 ): void {
   registerNoteTools(registry, container);
-  registerVaultTools(registry, container, globalConfig);
+  registerVaultTools(registry, container, holder, cliVaultPath, configPath);
   registerFrontmatterTools(registry, container);
   registerSearchTools(registry, container);
   registerSchemaTools(registry, container);

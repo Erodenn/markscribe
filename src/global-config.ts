@@ -23,8 +23,10 @@ export function getGlobalConfigPath(): string {
  * Returns null if the file doesn't exist.
  * Throws on parse errors so the caller can decide how to handle.
  */
-export async function loadGlobalConfig(): Promise<GlobalConfig | null> {
-  const configPath = getGlobalConfigPath();
+export async function loadGlobalConfig(
+  configPath?: string,
+): Promise<GlobalConfig | null> {
+  configPath = configPath ?? getGlobalConfigPath();
   try {
     const raw = await fs.readFile(configPath, "utf-8");
     const parsed = yaml.load(raw);
@@ -42,6 +44,37 @@ export async function loadGlobalConfig(): Promise<GlobalConfig | null> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       vaultscribeLog.debug({ configPath }, "no global config found");
       return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Save a GlobalConfig to ~/.vaultscribe/config.yaml.
+ * Creates the directory if it doesn't exist. Uses atomic write (temp + rename).
+ */
+export async function saveGlobalConfig(
+  config: GlobalConfig,
+  configPath?: string,
+): Promise<void> {
+  configPath = configPath ?? getGlobalConfigPath();
+  const configDir = path.dirname(configPath);
+
+  await fs.mkdir(configDir, { recursive: true });
+
+  const content = yaml.dump(config, { lineWidth: -1, noRefs: true });
+  const tmpPath = `${configPath}.tmp-${Date.now()}-${process.pid}`;
+
+  try {
+    await fs.writeFile(tmpPath, content, "utf-8");
+    await fs.rename(tmpPath, configPath);
+    vaultscribeLog.info({ configPath, vaultCount: Object.keys(config.vaults ?? {}).length }, "global config saved");
+  } catch (err) {
+    // Clean up temp file on failure
+    try {
+      await fs.unlink(tmpPath);
+    } catch {
+      // ignore cleanup errors
     }
     throw err;
   }
