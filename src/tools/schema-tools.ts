@@ -1,7 +1,36 @@
 import { z } from "zod";
-import type { ToolHandler, ServiceContainer, ToolResponse } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse, FolderValidation, LintResult } from "../types.js";
 import { requireServices, getRoot } from "./index.js";
 import { createChildLog } from "../markscribe-log.js";
+
+/**
+ * Compact a FullValidation.folders map for tool-response use by dropping entries
+ * that carry no actionable information: unclassified+passing folders with no
+ * structural checks and no schema-bound notes, plus notes with no applicable
+ * schema. Summary counts are computed upstream from the full result and are
+ * not affected.
+ */
+function compactFolders(
+  folders: Record<string, FolderValidation>,
+): Record<string, FolderValidation> {
+  const out: Record<string, FolderValidation> = {};
+  for (const [key, folder] of Object.entries(folders)) {
+    const filteredNotes: Record<string, LintResult> = {};
+    for (const [notePath, note] of Object.entries(folder.notes)) {
+      if (note.schema !== null || !note.pass) {
+        filteredNotes[notePath] = note;
+      }
+    }
+    const schemaBound = folder.schema !== null;
+    const hasStructural = folder.structural.length > 0;
+    const hasKeptNotes = Object.keys(filteredNotes).length > 0;
+    if (!schemaBound && folder.pass && !hasStructural && !hasKeptNotes) {
+      continue;
+    }
+    out[key] = { ...folder, notes: filteredNotes };
+  }
+  return out;
+}
 
 const log = createChildLog({ module: "schema-tools" });
 
@@ -178,28 +207,45 @@ function makeListSchemasTool(container: ServiceContainer): ToolHandler {
 // validate_all
 // ============================================================================
 
-const ValidateAllSchema = z.object({});
+const ValidateAllSchema = z.object({
+  verbose: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Include the full folder/note tree in the response. Default false returns only folders with a resolved schema, structural checks, or failures, and drops notes with no applicable schema. Summary counts are unaffected by this flag.",
+    ),
+});
 
 function makeValidateAllTool(container: ServiceContainer): ToolHandler {
   return {
     name: "validate_all",
     description:
-      "Validates the entire directory tree using the convention cascade. No arguments. Returns `{ root, summaryText, pass, conventionSources, folders, summary }`. Discovers `_conventions.md` notes and resolves folder schemas.",
+      "Validates the entire directory tree using the convention cascade. Optional `verbose` (default false) — when false, the response includes only folders/notes with actionable results. Returns `{ root, summaryText, pass, conventionSources, folders, summary }`. Discovers `_conventions.md` notes and resolves folder schemas.",
     inputSchema: ValidateAllSchema,
-    async handler(_args): Promise<ToolResponse> {
+    async handler(args): Promise<ToolResponse> {
       try {
         const services = requireServices(container);
-        log.info("validate_all called");
+        const { verbose } = ValidateAllSchema.parse(args ?? {});
+        log.info({ verbose }, "validate_all called");
         await services.schema.refresh();
         const result = await services.schema.validateAll();
         log.info(
-          { pass: result.pass, summary: result.summary },
+          { pass: result.pass, summary: result.summary, verbose },
           "validate_all complete",
         );
         const { total, passed, failed, skipped } = result.summary;
         const summaryText = `${passed}/${total} folders passed, ${failed} failed, ${skipped} skipped`;
+        const folders = verbose ? result.folders : compactFolders(result.folders);
+        const payload = {
+          root: getRoot(container),
+          summaryText,
+          pass: result.pass,
+          conventionSources: result.conventionSources,
+          folders,
+          summary: result.summary,
+        };
         return {
-          content: [{ type: "text", text: JSON.stringify({ root: getRoot(container), summaryText, ...result }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
         };
       } catch (err) {
         log.error({ err }, "validate_all failed");

@@ -121,6 +121,14 @@ function makeCreateNoteTool(container: ServiceContainer): ToolHandler {
           }
         }
 
+        // When the caller explicitly chose a schema, persist that binding in
+        // the note's frontmatter so subsequent lints resolve it via the
+        // `note_schema` field — even in folders with no convention mapping.
+        // Respect an explicit override if the caller set note_schema themselves.
+        if (explicitSchema !== undefined && !overrideKeys.has("note_schema")) {
+          merged.note_schema = explicitSchema;
+        }
+
         finalFrontmatter = merged;
         log.debug(
           {
