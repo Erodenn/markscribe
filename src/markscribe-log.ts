@@ -9,7 +9,7 @@
  * Usage:
  *   import { markscribeLog } from "./markscribe-log.js";
  *
- *   markscribeLog.info({ vaultPath, noteCount }, "vault indexed");
+ *   markscribeLog.info({ rootPath, noteCount }, "directory indexed");
  *   markscribeLog.debug({ schema, path }, "schema resolved");
  *   markscribeLog.error({ err, path }, "atomic write failed");
  */

@@ -10,7 +10,7 @@ const log = createChildLog({ module: "frontmatter-tools" });
 // ============================================================================
 
 const GetFrontmatterSchema = z.object({
-  path: z.string().describe("Vault-relative path to the note."),
+  path: z.string().describe("Root-relative path to the note."),
 });
 
 function makeGetFrontmatterTool(container: ServiceContainer): ToolHandler {
@@ -57,7 +57,7 @@ function makeGetFrontmatterTool(container: ServiceContainer): ToolHandler {
 // ============================================================================
 
 const UpdateFrontmatterSchema = z.object({
-  path: z.string().describe("Vault-relative path to the note."),
+  path: z.string().describe("Root-relative path to the note."),
   fields: z.record(z.string(), z.unknown()).describe("Key-value pairs to set in the frontmatter."),
   merge: z
     .boolean()
@@ -115,7 +115,7 @@ function makeUpdateFrontmatterTool(container: ServiceContainer): ToolHandler {
 // ============================================================================
 
 const ManageTagsSchema = z.object({
-  path: z.string().describe("Vault-relative path to the note."),
+  path: z.string().describe("Root-relative path to the note."),
   operation: z
     .enum(["add", "remove", "list"])
     .describe('Tag operation: "add" new tags, "remove" existing tags, or "list" all tags.'),

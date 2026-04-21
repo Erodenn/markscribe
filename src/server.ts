@@ -33,7 +33,7 @@ export async function startServer(): Promise<void> {
 
   // Build tool registry — tools reference `container` so they see mutations
   const registry = new Map<string, ToolHandler>();
-  registerTools(registry, container, args.schemasDir);
+  registerTools(registry, container, (rootPath) => buildServices(rootPath, args.schemasDir));
 
   const server = new Server(
     { name: SERVER_NAME, version: SERVER_VERSION },

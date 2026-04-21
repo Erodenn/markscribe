@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import { SchemaEngineImpl } from "./schema-engine.js";
 import { FileServiceImpl } from "./file-service.js";
 import { PathFilterImpl } from "./path-filter.js";
+import { makeTempDir, writeFile } from "../test-helpers.js";
 
 /**
  * Tests for SchemaEngineImpl.refresh() — verifies that schemas and conventions
@@ -53,19 +53,9 @@ content:
   rules: []
 `;
 
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-schema-test-"));
-}
-
 function makeVaultService(vaultPath: string): FileServiceImpl {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
   return new FileServiceImpl(vaultPath, filter);
-}
-
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
 }
 
 describe("SchemaEngineImpl.refresh()", () => {
@@ -75,7 +65,7 @@ describe("SchemaEngineImpl.refresh()", () => {
   let engine: SchemaEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-schema-test-");
     schemasDir = path.join(tmpDir, ".markscribe", "schemas");
     await fs.mkdir(schemasDir, { recursive: true });
     vaultSvc = makeVaultService(tmpDir);

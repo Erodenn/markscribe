@@ -13,7 +13,7 @@ import type {
   ParsedNote,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
-import { expandHubPattern } from "../utils.js";
+import { expandHubPattern, normalizePath } from "../utils.js";
 import { SchemaRegistryImpl } from "./schema-registry.js";
 import { bundledSchemas } from "../bundled-schemas/index.js";
 import { NoteSchemaEngineImpl } from "./note-schema-engine.js";
@@ -27,19 +27,19 @@ const log = createChildLog({ service: "SchemaEngine" });
 // ============================================================================
 
 export class SchemaEngineImpl implements SchemaEngine {
-  private readonly vault: FileService;
+  private readonly file: FileService;
   private readonly registry: SchemaRegistryImpl;
   private readonly noteEngine: NoteSchemaEngineImpl;
   private readonly folderEngine: FolderSchemaEngineImpl;
   private readonly cascade: ConventionCascadeImpl;
   private schemasDir: string | null = null;
 
-  constructor(vaultService: FileService) {
-    this.vault = vaultService;
+  constructor(fileService: FileService) {
+    this.file = fileService;
     this.registry = new SchemaRegistryImpl();
-    this.noteEngine = new NoteSchemaEngineImpl(vaultService);
-    this.folderEngine = new FolderSchemaEngineImpl(vaultService);
-    this.cascade = new ConventionCascadeImpl(vaultService, this.registry);
+    this.noteEngine = new NoteSchemaEngineImpl(fileService);
+    this.folderEngine = new FolderSchemaEngineImpl(fileService);
+    this.cascade = new ConventionCascadeImpl(fileService, this.registry);
     log.info("SchemaEngine initialized");
   }
 
@@ -110,7 +110,7 @@ export class SchemaEngineImpl implements SchemaEngine {
     log.info({ path: notePath }, "lintNote start");
 
     // Read note once
-    const note = await this.vault.readNote(notePath);
+    const note = await this.file.readNote(notePath);
 
     // Check explicit schema tag in frontmatter
     let schema: NoteSchema | null = null;
@@ -211,7 +211,7 @@ export class SchemaEngineImpl implements SchemaEngine {
 
   private isLikelyHub(notePath: string, folderSchema: FolderSchema): boolean {
     if (!folderSchema.hub?.detection) return false;
-    const folderName = path.basename(path.dirname(notePath.replace(/\\/g, "/")));
+    const folderName = path.basename(path.dirname(normalizePath(notePath)));
     const filename = path.basename(notePath);
     for (const rule of folderSchema.hub.detection) {
       if ("pattern" in rule) {

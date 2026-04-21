@@ -110,7 +110,6 @@ export interface ScannedLink {
 export function* scanWikilinks(content: string): Generator<ScannedLink> {
   const lines = content.split("\n");
   let inCodeBlock = false;
-  const regex = new RegExp(WIKILINK_RE.source, "g");
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -121,10 +120,10 @@ export function* scanWikilinks(content: string): Generator<ScannedLink> {
     }
     if (inCodeBlock) continue;
 
-    regex.lastIndex = 0;
+    WIKILINK_RE.lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    while ((match = regex.exec(line)) !== null) {
+    while ((match = WIKILINK_RE.exec(line)) !== null) {
       const target = match[1].trim();
       if (!target) continue;
 
@@ -162,25 +161,25 @@ export function expandHubPattern(pattern: string, folderName: string): string {
 }
 
 /**
- * Recursively walk the vault and collect all file paths,
+ * Recursively walk the root directory and collect all file paths,
  * optionally filtered to a scope prefix. Uses eager directory
  * pruning to skip subtrees that can't contain scoped paths.
  */
-export async function walkVaultFiles(vault: FileService, scope?: string): Promise<string[]> {
+export async function walkFiles(file: FileService, scope?: string): Promise<string[]> {
   const paths: string[] = [];
-  await walkDir(vault, "", scope, paths);
+  await walkDir(file, "", scope, paths);
   return paths;
 }
 
 async function walkDir(
-  vault: FileService,
+  file: FileService,
   relDir: string,
   scope: string | undefined,
   paths: string[],
 ): Promise<void> {
   let listing;
   try {
-    listing = await vault.listDirectory(relDir);
+    listing = await file.listDirectory(relDir);
   } catch {
     return;
   }
@@ -198,7 +197,7 @@ async function walkDir(
           continue;
         }
       }
-      await walkDir(vault, entry.path, scope, paths);
+      await walkDir(file, entry.path, scope, paths);
     } else {
       if (scope !== undefined && !entry.path.startsWith(scope)) {
         continue;

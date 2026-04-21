@@ -1,21 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
 import { registerLinkTools } from "./link-tools.js";
 import { LinkEngineImpl } from "../services/link-engine.js";
 import { FileServiceImpl } from "../services/file-service.js";
 import { PathFilterImpl } from "../services/path-filter.js";
 import type { ToolHandler, Services } from "../types.js";
+import { makeTempDir, writeFile } from "../test-helpers.js";
 
 /**
  * All link-tools tests use real temp vault directories — no mocks.
  * Services is partially constructed (only vault + links needed by these tools).
  */
-
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-link-tools-test-"));
-}
 
 function makeServices(vaultPath: string): Services {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
@@ -38,12 +33,6 @@ function makeRegistry(services: Services): Map<string, ToolHandler> {
   return registry;
 }
 
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
-}
-
 async function callTool(
   registry: Map<string, ToolHandler>,
   name: string,
@@ -63,7 +52,7 @@ describe("registerLinkTools", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-tools-test-");
   });
 
   afterEach(async () => {
@@ -102,7 +91,7 @@ describe("get_backlinks tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-tools-test-");
     registry = makeRegistry(makeServices(tmpDir));
   });
 
@@ -180,7 +169,7 @@ describe("find_unlinked_mentions tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-tools-test-");
     registry = makeRegistry(makeServices(tmpDir));
   });
 
@@ -257,7 +246,7 @@ describe("find_broken_links tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-tools-test-");
     registry = makeRegistry(makeServices(tmpDir));
   });
 
@@ -334,7 +323,7 @@ describe("find_orphans tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-tools-test-");
     registry = makeRegistry(makeServices(tmpDir));
   });
 

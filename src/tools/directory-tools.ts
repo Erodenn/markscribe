@@ -1,10 +1,11 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { z } from "zod";
-import type { ToolHandler, ServiceContainer, ToolResponse } from "../types.js";
+import type { ToolHandler, ServiceContainer, ToolResponse, Services } from "../types.js";
 import { requireServices, getRoot } from "./index.js";
-import { buildServices } from "../build-services.js";
 import { createChildLog } from "../markscribe-log.js";
+
+export type RebuildServices = (rootPath: string) => Promise<Services>;
 
 const log = createChildLog({ module: "directory-tools" });
 
@@ -41,7 +42,7 @@ function makeListDirectoryTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Verify the directory exists", "Ensure the path is vault-relative (not absolute)"],
+            possibleSolutions: ["Check the path with list_directory", "Verify the directory exists", "Ensure the path is relative (not absolute)"],
           }) }],
           isError: true,
         };
@@ -102,7 +103,7 @@ const SwitchDirectorySchema = z.object({
 
 function makeSwitchDirectoryTool(
   container: ServiceContainer,
-  schemasDir: string,
+  rebuildServices: RebuildServices,
 ): ToolHandler {
   return {
     name: "switch_directory",
@@ -150,8 +151,7 @@ function makeSwitchDirectoryTool(
         }
 
         const resolvedPath = path.resolve(dirPath);
-        const newServices = await buildServices(resolvedPath, schemasDir);
-        container.services = newServices;
+        container.services = await rebuildServices(resolvedPath);
 
         log.info({ path: resolvedPath }, "switch_directory complete");
         return {
@@ -184,12 +184,12 @@ function makeSwitchDirectoryTool(
 export function registerDirectoryTools(
   registry: Map<string, ToolHandler>,
   container: ServiceContainer,
-  schemasDir: string,
+  rebuildServices: RebuildServices,
 ): void {
   const tools = [
     makeListDirectoryTool(container),
     makeGetStatsTool(container),
-    makeSwitchDirectoryTool(container, schemasDir),
+    makeSwitchDirectoryTool(container, rebuildServices),
   ];
 
   for (const tool of tools) {

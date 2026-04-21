@@ -4,6 +4,7 @@ import type {
   ResolvedConvention,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
+import { normalizePath } from "../utils.js";
 import type { SchemaRegistryImpl } from "./schema-registry.js";
 
 const log = createChildLog({ service: "ConventionCascade" });
@@ -26,12 +27,12 @@ export class ConventionCascadeImpl {
   private conventions = new Map<string, ResolvedConvention>();
 
   constructor(
-    private readonly vault: FileService,
+    private readonly file: FileService,
     private readonly registry: SchemaRegistryImpl,
   ) {}
 
   /**
-   * Walk the vault, find all _conventions.md files, parse their frontmatter,
+   * Walk the directory tree, find all _conventions.md files, parse their frontmatter,
    * and resolve the cascade for every directory.
    */
   async discover(): Promise<void> {
@@ -54,7 +55,7 @@ export class ConventionCascadeImpl {
     for (const dir of allDirs) {
       if (dir.conventionsPath) {
         try {
-          const note = await this.vault.readNote(dir.conventionsPath);
+          const note = await this.file.readNote(dir.conventionsPath);
           const fm = note.frontmatter;
 
           if (fm.inherit === false) {
@@ -93,13 +94,12 @@ export class ConventionCascadeImpl {
   }
 
   getForFolder(folderPath: string): ResolvedConvention | null {
-    const normalized = folderPath.replace(/\\/g, "/").replace(/\/$/, "");
+    const normalized = normalizePath(folderPath).replace(/\/$/, "");
     return this.conventions.get(normalized) ?? null;
   }
 
   getForNote(notePath: string): ResolvedConvention | null {
-    const normalized = notePath.replace(/\\/g, "/");
-    const dirPath = path.dirname(normalized).replace(/\\/g, "/");
+    const dirPath = normalizePath(path.dirname(normalizePath(notePath)));
     const effectiveDir = dirPath === "." ? "" : dirPath;
     return this.conventions.get(effectiveDir) ?? null;
   }
@@ -115,7 +115,7 @@ export class ConventionCascadeImpl {
   private async collectDirectories(dirPath: string, result: CollectedDir[]): Promise<void> {
     let listing;
     try {
-      listing = await this.vault.listDirectory(dirPath);
+      listing = await this.file.listDirectory(dirPath);
     } catch {
       return;
     }

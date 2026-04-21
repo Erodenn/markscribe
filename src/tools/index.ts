@@ -1,6 +1,6 @@
 import type { ToolHandler, Services, ServiceContainer } from "../types.js";
 import { registerNoteTools } from "./note-tools.js";
-import { registerDirectoryTools } from "./directory-tools.js";
+import { registerDirectoryTools, type RebuildServices } from "./directory-tools.js";
 import { registerFrontmatterTools } from "./frontmatter-tools.js";
 import { registerSearchTools } from "./search-tools.js";
 import { registerSchemaTools } from "./schema-tools.js";
@@ -34,10 +34,10 @@ export function getRoot(container: ServiceContainer): string {
 export function registerTools(
   registry: Map<string, ToolHandler>,
   container: ServiceContainer,
-  schemasDir: string,
+  rebuildServices: RebuildServices,
 ): void {
   registerNoteTools(registry, container);
-  registerDirectoryTools(registry, container, schemasDir);
+  registerDirectoryTools(registry, container, rebuildServices);
   registerFrontmatterTools(registry, container);
   registerSearchTools(registry, container);
   registerSchemaTools(registry, container);

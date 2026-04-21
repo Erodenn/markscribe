@@ -18,11 +18,22 @@ const log = createChildLog({ service: "FrontmatterService" });
  */
 const INLINE_TAG_RE = /(?:^|\s)#([^\s#[\]!"'`]+)/g;
 
-export class FrontmatterServiceImpl implements FrontmatterService {
-  private readonly vault: FileService;
+const tagRemovalRegexCache = new Map<string, RegExp>();
+function getTagRemovalRegex(tag: string): RegExp {
+  let re = tagRemovalRegexCache.get(tag);
+  if (!re) {
+    re = new RegExp(`(^|\\s)#${escapeRegex(tag)}(?=[\\s]|$)`, "gm");
+    tagRemovalRegexCache.set(tag, re);
+  }
+  re.lastIndex = 0;
+  return re;
+}
 
-  constructor(vaultService: FileService) {
-    this.vault = vaultService;
+export class FrontmatterServiceImpl implements FrontmatterService {
+  private readonly file: FileService;
+
+  constructor(fileService: FileService) {
+    this.file = fileService;
     log.info("FrontmatterService initialized");
   }
 
@@ -57,14 +68,14 @@ export class FrontmatterServiceImpl implements FrontmatterService {
   ): Promise<void> {
     log.info({ path: notePath, merge, fieldCount: Object.keys(fields).length }, "updateFields");
 
-    const note = await this.vault.readNote(notePath);
+    const note = await this.file.readNote(notePath);
     const { frontmatter, content } = note;
 
     const updatedFrontmatter = merge ? { ...frontmatter, ...fields } : { ...fields };
 
     const newRaw = this.stringify(updatedFrontmatter, content);
-    const fullPath = this.vault.resolvePath(notePath);
-    await this.vault.atomicWrite(fullPath, newRaw);
+    const fullPath = this.file.resolvePath(notePath);
+    await this.file.atomicWrite(fullPath, newRaw);
 
     log.info({ path: notePath, merge }, "updateFields complete");
   }
@@ -72,7 +83,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
   async manageTags(notePath: string, operation: TagOperation, tags?: string[]): Promise<TagResult> {
     log.info({ path: notePath, operation, tagCount: tags?.length }, "manageTags");
 
-    const note = await this.vault.readNote(notePath);
+    const note = await this.file.readNote(notePath);
     const { frontmatter, content } = note;
 
     const yamlTags = this.extractYamlTags(frontmatter);
@@ -89,8 +100,8 @@ export class FrontmatterServiceImpl implements FrontmatterService {
       const newYamlTags = [...yamlTags, ...tagsToAdd];
       const updatedFrontmatter = { ...frontmatter, tags: newYamlTags };
       const newRaw = this.stringify(updatedFrontmatter, content);
-      const fullPath = this.vault.resolvePath(notePath);
-      await this.vault.atomicWrite(fullPath, newRaw);
+      const fullPath = this.file.resolvePath(notePath);
+      await this.file.atomicWrite(fullPath, newRaw);
 
       const allTags = this.union(newYamlTags, inlineTags);
       log.info({ path: notePath, added: tagsToAdd }, "manageTags add complete");
@@ -103,8 +114,8 @@ export class FrontmatterServiceImpl implements FrontmatterService {
     const newContent = this.removeInlineTags(content, tagsToRemove);
     const updatedFrontmatter = { ...frontmatter, tags: newYamlTags };
     const newRaw = this.stringify(updatedFrontmatter, newContent);
-    const fullPath = this.vault.resolvePath(notePath);
-    await this.vault.atomicWrite(fullPath, newRaw);
+    const fullPath = this.file.resolvePath(notePath);
+    await this.file.atomicWrite(fullPath, newRaw);
 
     const remainingInline = this.extractInlineTags(newContent);
     const allTags = this.union(newYamlTags, remainingInline);
@@ -150,9 +161,7 @@ export class FrontmatterServiceImpl implements FrontmatterService {
 
     let result = content;
     for (const tag of tagsToRemove) {
-      // Match tag preceded by whitespace or start of line — remove the # and tag name
-      const escapedTag = escapeRegex(tag);
-      const re = new RegExp(`(^|\\s)#${escapedTag}(?=[\\s]|$)`, "gm");
+      const re = getTagRemovalRegex(tag);
       result = result.replace(re, (_, prefix: string) => prefix);
     }
     return result;

@@ -128,7 +128,7 @@ function makeFindBrokenLinksTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the scope path with list_directory", "Omit scope to scan the entire vault"],
+            possibleSolutions: ["Check the scope path with list_directory", "Omit scope to scan the entire directory"],
           }) }],
           isError: true,
         };
@@ -172,7 +172,7 @@ function makeFindOrphansTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the scope path with list_directory", "Omit scope to scan the entire vault"],
+            possibleSolutions: ["Check the scope path with list_directory", "Omit scope to scan the entire directory"],
           }) }],
           isError: true,
         };

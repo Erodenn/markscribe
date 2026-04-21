@@ -10,7 +10,7 @@ const log = createChildLog({ module: "schema-tools" });
 // ============================================================================
 
 const LintNoteSchema = z.object({
-  path: z.string().describe("Vault-relative path to the note to validate."),
+  path: z.string().describe("Root-relative path to the note to validate."),
 });
 
 function makeLintNoteTool(container: ServiceContainer): ToolHandler {
@@ -53,7 +53,7 @@ function makeLintNoteTool(container: ServiceContainer): ToolHandler {
 // ============================================================================
 
 const ValidateFolderSchema = z.object({
-  path: z.string().describe("Vault-relative path to the folder to validate."),
+  path: z.string().describe("Root-relative path to the folder to validate."),
 });
 
 function makeValidateFolderTool(container: ServiceContainer): ToolHandler {
@@ -97,7 +97,7 @@ function makeValidateFolderTool(container: ServiceContainer): ToolHandler {
 // ============================================================================
 
 const ValidateAreaSchema = z.object({
-  path: z.string().describe("Vault-relative path to the area (subtree) to validate recursively."),
+  path: z.string().describe("Root-relative path to the area (subtree) to validate recursively."),
 });
 
 function makeValidateAreaTool(container: ServiceContainer): ToolHandler {

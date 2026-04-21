@@ -650,7 +650,7 @@ export interface LinkEngine {
   /** Parse wikilinks from markdown content */
   extractLinks(content: string): WikiLink[];
 
-  /** Scan vault files and build directed adjacency map */
+  /** Scan directory files and build directed adjacency map */
   buildGraph(scope?: string): Promise<LinkGraph>;
 
   /** Find all notes linking to a given note */
@@ -665,7 +665,7 @@ export interface LinkEngine {
   /** Find notes with no incoming links in scope */
   findOrphans(scope?: string): Promise<string[]>;
 
-  /** Update all [[oldStem]] references vault-wide after a rename */
+  /** Update all [[oldStem]] references directory-wide after a rename */
   propagateRename(oldStem: string, newStem: string, scope?: string): Promise<RenameResult>;
 }
 

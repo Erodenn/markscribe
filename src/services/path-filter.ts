@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { PathFilter, PathFilterConfig } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
+import { normalizePath } from "../utils.js";
 
 const log = createChildLog({ service: "PathFilter" });
 
@@ -25,7 +26,7 @@ export class PathFilterImpl implements PathFilter {
 
     // Add user-provided blocked paths, split into segment vs name checks
     for (const blocked of config.blockedPaths) {
-      const normalized = blocked.replace(/\\/g, "/").replace(/\/$/, "");
+      const normalized = normalizePath(blocked).replace(/\/$/, "");
       if (normalized.includes("/")) {
         // Multi-segment: treat the first segment as the blocking segment
         this.blockedSegments.add(normalized.split("/")[0]);
@@ -105,7 +106,6 @@ export class PathFilterImpl implements PathFilter {
 
   /** Normalize a path to forward slashes for consistent checking. */
   private normalize(filePath: string): string {
-    // Use path.normalize to resolve . and .., then use forward slashes
-    return path.normalize(filePath).replace(/\\/g, "/");
+    return normalizePath(path.normalize(filePath));
   }
 }

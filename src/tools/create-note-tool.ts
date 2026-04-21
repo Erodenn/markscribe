@@ -11,7 +11,7 @@ const log = createChildLog({ module: "create-note-tool" });
 // ============================================================================
 
 const CreateNoteSchema = z.object({
-  path: z.string().describe("Vault-relative path for the new note (e.g. Knowledge/MyNote.md)"),
+  path: z.string().describe("Root-relative path for the new note (e.g. Knowledge/MyNote.md)"),
   content: z.string().default("").describe("Note body content (default: empty string)"),
   frontmatter: z
     .record(z.string(), z.unknown())
@@ -76,7 +76,7 @@ function makeCreateNoteTool(container: ServiceContainer): ToolHandler {
             content: [{ type: "text", text: JSON.stringify({
               root: getRoot(container),
               error: err instanceof Error ? err.message : String(err),
-              possibleSolutions: ["Check the path is vault-relative", "Ensure the path is not blocked (.obsidian, .git)"],
+              possibleSolutions: ["Check the path is root-relative", "Ensure the path is not blocked (.obsidian, .git)"],
             }) }],
             isError: true,
           };
@@ -142,7 +142,7 @@ function makeCreateNoteTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path is vault-relative and not blocked", "Ensure parent directories are accessible"],
+            possibleSolutions: ["Check the path is root-relative and not blocked", "Ensure parent directories are accessible"],
           }) }],
           isError: true,
         };

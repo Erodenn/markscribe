@@ -6,10 +6,7 @@ import { registerDirectoryTools } from "./directory-tools.js";
 import { FileServiceImpl } from "../services/file-service.js";
 import { PathFilterImpl } from "../services/path-filter.js";
 import type { ToolHandler, Services, ServiceContainer } from "../types.js";
-
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-vault-tools-test-"));
-}
+import { makeTempDir, writeFile } from "../test-helpers.js";
 
 function makeServices(vaultPath: string): Services {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
@@ -23,16 +20,11 @@ function makeServices(vaultPath: string): Services {
   };
 }
 
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
-}
-
 function buildRegistry(services: Services | null): Map<string, ToolHandler> {
   const registry = new Map<string, ToolHandler>();
   const container: ServiceContainer = { services };
-  registerDirectoryTools(registry, container, "");
+  const stubRebuild = async () => { throw new Error("rebuild not wired in test"); };
+  registerDirectoryTools(registry, container, stubRebuild);
   return registry;
 }
 
@@ -61,7 +53,7 @@ describe("list_directory tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-vault-tools-test-");
     registry = buildRegistry(makeServices(tmpDir));
   });
 
@@ -192,7 +184,7 @@ describe("get_stats tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-vault-tools-test-");
     registry = buildRegistry(makeServices(tmpDir));
   });
 
@@ -288,7 +280,8 @@ describe("requireServices error message", () => {
   it("mentions switch_directory and --root in the error when no directory is active", async () => {
     const container: ServiceContainer = { services: null };
     const registry = new Map<string, ToolHandler>();
-    registerDirectoryTools(registry, container, "");
+    const stubRebuild = async () => { throw new Error("rebuild not wired in test"); };
+  registerDirectoryTools(registry, container, stubRebuild);
 
     // Any tool that calls requireServices should get the hint
     const result = await callTool(registry, "list_directory", {});

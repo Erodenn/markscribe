@@ -1,16 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
 import { registerFrontmatterTools } from "./frontmatter-tools.js";
 import { FileServiceImpl } from "../services/file-service.js";
 import { PathFilterImpl } from "../services/path-filter.js";
 import { FrontmatterServiceImpl } from "../services/frontmatter-service.js";
 import type { ToolHandler, Services } from "../types.js";
-
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-fm-tools-test-"));
-}
+import { makeTempDir, writeFile } from "../test-helpers.js";
 
 function makeServices(vaultPath: string): Services {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
@@ -23,12 +19,6 @@ function makeServices(vaultPath: string): Services {
     schema: null as unknown as Services["schema"],
     links: null as unknown as Services["links"],
   };
-}
-
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
 }
 
 function buildRegistry(services: Services): Map<string, ToolHandler> {
@@ -62,7 +52,7 @@ describe("get_frontmatter tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-fm-tools-test-");
     registry = buildRegistry(makeServices(tmpDir));
   });
 
@@ -111,7 +101,7 @@ describe("update_frontmatter tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-fm-tools-test-");
     registry = buildRegistry(makeServices(tmpDir));
   });
 
@@ -198,7 +188,7 @@ describe("manage_tags tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-fm-tools-test-");
     registry = buildRegistry(makeServices(tmpDir));
   });
 

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
 import { registerSearchTools } from "./search-tools.js";
 import { FileServiceImpl } from "../services/file-service.js";
@@ -8,10 +7,7 @@ import { PathFilterImpl } from "../services/path-filter.js";
 import { FrontmatterServiceImpl } from "../services/frontmatter-service.js";
 import { SearchServiceImpl } from "../services/search-service.js";
 import type { ToolHandler, Services } from "../types.js";
-
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-search-tools-test-"));
-}
+import { makeTempDir, writeFile } from "../test-helpers.js";
 
 function makeServices(vaultPath: string): Services {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
@@ -25,12 +21,6 @@ function makeServices(vaultPath: string): Services {
     schema: null as unknown as Services["schema"],
     links: null as unknown as Services["links"],
   };
-}
-
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
 }
 
 function buildRegistry(services: Services): Map<string, ToolHandler> {
@@ -62,7 +52,7 @@ describe("search_notes tool", () => {
   let registry: Map<string, ToolHandler>;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-search-tools-test-");
     registry = buildRegistry(makeServices(tmpDir));
   });
 

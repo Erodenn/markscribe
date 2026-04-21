@@ -42,8 +42,9 @@ type StructuralChecker = (ctx: StructuralCheckContext) => Promise<Check>;
 
 export class FolderSchemaEngineImpl {
   private readonly checkers: Record<string, StructuralChecker>;
+  private readonly regexCache = new Map<string, RegExp>();
 
-  constructor(private readonly vault: FileService) {
+  constructor(private readonly file: FileService) {
     this.checkers = {
       hubCoversChildren: (ctx) => this.checkHubCoversChildren(ctx),
       noOrphansInFolder: (ctx) => this.checkNoOrphansInFolder(ctx),
@@ -65,7 +66,7 @@ export class FolderSchemaEngineImpl {
   ): Promise<FolderValidation> {
     log.info({ path: folderPath, schema: folderSchema?.name ?? null }, "validateFolder start");
 
-    const listing = await this.vault.listDirectory(folderPath);
+    const listing = await this.file.listDirectory(folderPath);
     const folderName = path.basename(folderPath) || folderPath;
 
     // Exclude _conventions.md — it's a cascade binding, not a content note
@@ -105,7 +106,7 @@ export class FolderSchemaEngineImpl {
     const notesMap = new Map<string, ParsedNote>();
     for (const f of mdFiles) {
       try {
-        notesMap.set(f, await this.vault.readNote(f));
+        notesMap.set(f, await this.file.readNote(f));
       } catch {
         // skip unreadable
       }
@@ -362,12 +363,21 @@ export class FolderSchemaEngineImpl {
     };
   }
 
+  private getCachedRegex(pattern: string): RegExp {
+    let re = this.regexCache.get(pattern);
+    if (!re) {
+      re = new RegExp(pattern);
+      this.regexCache.set(pattern, re);
+    }
+    return re;
+  }
+
   private async checkRequiredFile(ctx: StructuralCheckContext): Promise<Check> {
     const pattern = ctx.rule.pattern;
     if (!pattern) {
       return { name: ctx.rule.name, pass: false, detail: "requiredFile: no pattern specified" };
     }
-    const re = new RegExp(pattern);
+    const re = this.getCachedRegex(pattern);
     const found = ctx.mdFiles.some((f) => re.test(path.basename(f)));
     return {
       name: ctx.rule.name,
@@ -381,7 +391,7 @@ export class FolderSchemaEngineImpl {
     if (!pattern) {
       return { name: ctx.rule.name, pass: false, detail: "filenamePattern: no pattern specified" };
     }
-    const re = new RegExp(pattern);
+    const re = this.getCachedRegex(pattern);
     const failing = ctx.mdFiles.filter((f) => !re.test(path.basename(f)));
     const pass = failing.length === 0;
     return {
@@ -508,7 +518,7 @@ export class FolderSchemaEngineImpl {
   ): Promise<void> {
     let listing;
     try {
-      listing = await this.vault.listDirectory(dirPath);
+      listing = await this.file.listDirectory(dirPath);
     } catch (err) {
       log.warn({ dirPath, err }, "walkDirectories: could not list directory");
       return;

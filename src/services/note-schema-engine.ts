@@ -15,10 +15,14 @@ import { escapeRegex, expandTemplateVars, buildTemplateContext, evalCondition } 
 
 const log = createChildLog({ service: "NoteSchemaEngine" });
 
+const EMPTY_WIKILINK_RE = /\[\[\s*(?:[|#][^\]]+)?\s*\]\]/;
+const WIKILINK_OPEN_RE = /\[\[/g;
+const WIKILINK_CLOSE_RE = /\]\]/g;
+
 export class NoteSchemaEngineImpl {
   private readonly regexCache = new Map<string, RegExp>();
 
-  constructor(private readonly vault: FileService) {}
+  constructor(private readonly file: FileService) {}
 
   /**
    * Lint a note against a pre-resolved schema.
@@ -36,7 +40,7 @@ export class NoteSchemaEngineImpl {
       return { path: notePath, pass: true, schema: null, checks: [] };
     }
 
-    const note = preReadNote ?? (await this.vault.readNote(notePath));
+    const note = preReadNote ?? (await this.file.readNote(notePath));
     const fm = note.frontmatter;
     const content = note.content;
     const ctx = buildTemplateContext(notePath);
@@ -287,8 +291,7 @@ export class NoteSchemaEngineImpl {
   private checkContentRule(rule: ContentRule, content: string, ctx: TemplateContext): Check {
     switch (rule.check) {
       case "hasPattern": {
-        const re = new RegExp(rule.pattern ?? "", "g");
-        re.lastIndex = 0;
+        const re = this.getCachedRegex(rule.pattern ?? "");
         const pass = re.test(content);
         return {
           name: rule.name,
@@ -298,8 +301,7 @@ export class NoteSchemaEngineImpl {
       }
 
       case "noPattern": {
-        const re = new RegExp(rule.pattern ?? "", "g");
-        re.lastIndex = 0;
+        const re = this.getCachedRegex(rule.pattern ?? "");
         const pass = !re.test(content);
         return {
           name: rule.name,
@@ -310,8 +312,7 @@ export class NoteSchemaEngineImpl {
 
       case "noSelfWikilink": {
         const stem = ctx.stem;
-        const escapedStem = escapeRegex(stem);
-        const selfRe = new RegExp(`\\[\\[${escapedStem}(?:[|#][^\\]]*)?\\]\\]`);
+        const selfRe = this.getCachedRegex(`\\[\\[${escapeRegex(stem)}(?:[|#][^\\]]*)?\\]\\]`);
         const pass = !selfRe.test(content);
         return {
           name: rule.name,
@@ -321,9 +322,7 @@ export class NoteSchemaEngineImpl {
       }
 
       case "noMalformedWikilinks": {
-        const emptyLinkRe = /\[\[\s*(?:[|#][^\]]+)?\s*\]\]/g;
-        emptyLinkRe.lastIndex = 0;
-        if (emptyLinkRe.test(content)) {
+        if (EMPTY_WIKILINK_RE.test(content)) {
           return {
             name: rule.name,
             pass: false,
@@ -333,8 +332,8 @@ export class NoteSchemaEngineImpl {
 
         const lines = content.split("\n");
         for (const line of lines) {
-          const opens = (line.match(/\[\[/g) ?? []).length;
-          const closes = (line.match(/\]\]/g) ?? []).length;
+          const opens = (line.match(WIKILINK_OPEN_RE) ?? []).length;
+          const closes = (line.match(WIKILINK_CLOSE_RE) ?? []).length;
           if (opens > closes) {
             return {
               name: rule.name,

@@ -1,18 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
 import { FrontmatterServiceImpl } from "./frontmatter-service.js";
 import { FileServiceImpl } from "./file-service.js";
 import { PathFilterImpl } from "./path-filter.js";
+import { makeTempDir, writeFile, readFile } from "../test-helpers.js";
 
 /**
  * All FrontmatterService tests use a real temp directory — no mocks.
  */
-
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-fm-test-"));
-}
 
 function makeServices(vaultPath: string): {
   frontmatter: FrontmatterServiceImpl;
@@ -23,22 +18,12 @@ function makeServices(vaultPath: string): {
   return { frontmatter };
 }
 
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
-}
-
-async function readFile(base: string, relPath: string): Promise<string> {
-  return fs.readFile(path.join(base, relPath), "utf-8");
-}
-
 describe("FrontmatterServiceImpl", () => {
   let tmpDir: string;
   let svc: FrontmatterServiceImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-fm-test-");
     ({ frontmatter: svc } = makeServices(tmpDir));
   });
 

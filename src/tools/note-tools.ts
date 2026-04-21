@@ -1,8 +1,8 @@
-import path from "node:path";
 import { z } from "zod";
 import type { ToolHandler, ToolResponse, ServiceContainer } from "../types.js";
 import { requireServices, getRoot } from "./index.js";
 import { createChildLog } from "../markscribe-log.js";
+import { getStem } from "../utils.js";
 
 const log = createChildLog({ module: "note-tools" });
 
@@ -45,7 +45,7 @@ function makeReadNoteTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Verify the file exists with list_directory", "Ensure the path is vault-relative (not absolute)"],
+            possibleSolutions: ["Check the path with list_directory", "Verify the file exists with list_directory", "Ensure the path is root-relative (not absolute)"],
           }) }],
           isError: true,
         };
@@ -98,7 +98,7 @@ function makeWriteNoteTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path is vault-relative", "Ensure the path is not blocked (.obsidian, .git)", "Use read_note to confirm an existing note's path"],
+            possibleSolutions: ["Check the path is root-relative", "Ensure the path is not blocked (.obsidian, .git)", "Use read_note to confirm an existing note's path"],
           }) }],
           isError: true,
         };
@@ -254,9 +254,8 @@ function makeMoveNoteTool(container: ServiceContainer): ToolHandler {
           };
         }
 
-        // Derive stems for propagateRename: filename without extension, leading _ stripped
-        const oldStem = path.basename(oldPath, path.extname(oldPath)).replace(/^_/, "");
-        const newStem = path.basename(newPath, path.extname(newPath)).replace(/^_/, "");
+        const oldStem = getStem(oldPath);
+        const newStem = getStem(newPath);
 
         const renameResult = await services.links.propagateRename(oldStem, newStem);
         log.info(
@@ -330,7 +329,7 @@ function makeReadMultipleNotesTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check each path with list_directory", "Ensure paths are vault-relative", "Provide between 1 and 10 paths"],
+            possibleSolutions: ["Check each path with list_directory", "Ensure paths are root-relative", "Provide between 1 and 10 paths"],
           }) }],
           isError: true,
         };

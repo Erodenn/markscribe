@@ -1,18 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
 import { LinkEngineImpl } from "./link-engine.js";
 import { FileServiceImpl } from "./file-service.js";
 import { PathFilterImpl } from "./path-filter.js";
+import { makeTempDir, writeFile, readFile } from "../test-helpers.js";
 
 /**
  * All LinkEngine tests use real temp directories — no mocks.
  */
-
-async function makeTempVault(): Promise<string> {
-  return await fs.mkdtemp(path.join(os.tmpdir(), "markscribe-link-test-"));
-}
 
 function makeVaultService(vaultPath: string): FileServiceImpl {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
@@ -22,16 +18,6 @@ function makeVaultService(vaultPath: string): FileServiceImpl {
 function makeEngine(vaultPath: string): LinkEngineImpl {
   const vault = makeVaultService(vaultPath);
   return new LinkEngineImpl(vault);
-}
-
-async function writeFile(base: string, relPath: string, content: string): Promise<void> {
-  const full = path.join(base, relPath);
-  await fs.mkdir(path.dirname(full), { recursive: true });
-  await fs.writeFile(full, content, "utf-8");
-}
-
-async function readFile(base: string, relPath: string): Promise<string> {
-  return await fs.readFile(path.join(base, relPath), "utf-8");
 }
 
 // ============================================================================
@@ -157,7 +143,7 @@ describe("LinkEngineImpl.buildGraph", () => {
   let engine: LinkEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-test-");
     engine = makeEngine(tmpDir);
   });
 
@@ -219,7 +205,7 @@ describe("LinkEngineImpl.getBacklinks", () => {
   let engine: LinkEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-test-");
     engine = makeEngine(tmpDir);
   });
 
@@ -310,7 +296,7 @@ describe("LinkEngineImpl.findBrokenLinks", () => {
   let engine: LinkEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-test-");
     engine = makeEngine(tmpDir);
   });
 
@@ -383,7 +369,7 @@ describe("LinkEngineImpl.findOrphans", () => {
   let engine: LinkEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-test-");
     engine = makeEngine(tmpDir);
   });
 
@@ -446,7 +432,7 @@ describe("LinkEngineImpl.findUnlinkedMentions", () => {
   let engine: LinkEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-test-");
     engine = makeEngine(tmpDir);
   });
 
@@ -513,7 +499,7 @@ describe("LinkEngineImpl.propagateRename", () => {
   let engine: LinkEngineImpl;
 
   beforeEach(async () => {
-    tmpDir = await makeTempVault();
+    tmpDir = await makeTempDir("markscribe-link-test-");
     engine = makeEngine(tmpDir);
   });
 

@@ -6,7 +6,7 @@ import type {
   FrontmatterOperator,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
-import { walkVaultFiles } from "../utils.js";
+import { walkFiles } from "../utils.js";
 
 const log = createChildLog({ service: "SearchService" });
 
@@ -65,15 +65,15 @@ export interface SearchServiceConfig {
 }
 
 export class SearchServiceImpl implements SearchService {
-  private readonly vault: FileService;
+  private readonly file: FileService;
   private readonly maxResults: number;
   private readonly excerptChars: number;
 
   constructor(
-    vaultService: FileService,
+    fileService: FileService,
     config?: SearchServiceConfig,
   ) {
-    this.vault = vaultService;
+    this.file = fileService;
     this.maxResults = config?.maxResults ?? DEFAULT_MAX_RESULTS;
     this.excerptChars = config?.excerptChars ?? DEFAULT_EXCERPT_CHARS;
     log.info(
@@ -124,7 +124,7 @@ export class SearchServiceImpl implements SearchService {
       const batchResults = await Promise.all(
         batch.map(async (notePath) => {
           try {
-            return { note: await this.vault.readNote(notePath), path: notePath };
+            return { note: await this.file.readNote(notePath), path: notePath };
           } catch {
             log.debug({ path: notePath }, "search: skipping unreadable note");
             return null;
@@ -264,7 +264,7 @@ export class SearchServiceImpl implements SearchService {
       const batchResults = await Promise.all(
         batch.map(async (notePath) => {
           try {
-            return { note: await this.vault.readNote(notePath), path: notePath };
+            return { note: await this.file.readNote(notePath), path: notePath };
           } catch {
             log.debug({ path: notePath }, "searchByFrontmatter: skipping unreadable note");
             return null;
@@ -305,10 +305,10 @@ export class SearchServiceImpl implements SearchService {
   // =========================================================================
 
   /**
-   * Walk the vault and collect all note paths, optionally filtered to a scope prefix.
+   * Walk the directory tree and collect all note paths, optionally filtered to a scope prefix.
    */
   private async collectPaths(scope?: string): Promise<string[]> {
-    return walkVaultFiles(this.vault, scope);
+    return walkFiles(this.file, scope);
   }
 
   /** Convert frontmatter object to a flat text string for tokenization. */

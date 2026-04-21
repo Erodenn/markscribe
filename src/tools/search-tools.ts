@@ -17,7 +17,7 @@ const SearchNotesSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Vault-relative path prefix to restrict the search scope. Omit to search entire vault.",
+      "Root-relative path prefix to restrict the search scope. Omit to search the entire directory.",
     ),
   searchContent: z
     .boolean()
@@ -65,7 +65,7 @@ function makeSearchNotesTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Try a different search query", "Use list_directory to browse the vault structure", "Check the scope path exists with list_directory"],
+            possibleSolutions: ["Try a different search query", "Use list_directory to browse the directory structure", "Check the scope path exists with list_directory"],
           }) }],
           isError: true,
         };

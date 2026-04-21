@@ -14,6 +14,7 @@ import type {
   DirectoryStats,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
+import { normalizePath } from "../utils.js";
 
 const log = createChildLog({ service: "FileService" });
 
@@ -36,7 +37,7 @@ export class FileServiceImpl implements FileService {
 
   /**
    * Resolve a relative path to an absolute path.
-   * Throws if the resolved path escapes the vault root or is blocked by PathFilter.
+   * Throws if the resolved path escapes the root directory or is blocked by PathFilter.
    */
   resolvePath(relativePath: string): string {
     const { absolute, normalized } = this.resolveAbsolute(relativePath);
@@ -189,7 +190,7 @@ export class FileServiceImpl implements FileService {
   }
 
   async listDirectory(relativePath: string): Promise<DirectoryListing> {
-    log.info({ path: relativePath }, "listDirectory");
+    log.debug({ path: relativePath }, "listDirectory");
 
     const fullPath =
       relativePath === "" || relativePath === "."
@@ -301,11 +302,10 @@ export class FileServiceImpl implements FileService {
 
     const relative = path.relative(this.rootPath, absolute);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      throw new Error(`Path traversal detected: "${relativePath}" escapes root directory`);
+      throw new Error(`Path traversal detected: "${relativePath}" escapes the root directory`);
     }
 
-    const normalized = relative.replace(/\\/g, "/");
-    return { absolute, normalized };
+    return { absolute, normalized: normalizePath(relative) };
   }
 
   /**

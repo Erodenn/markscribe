@@ -9,15 +9,17 @@ import type {
   RenameResult,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
-import { escapeRegex, getStem, walkVaultFiles, scanWikilinks, WIKILINK_RE, CODE_FENCE_RE } from "../utils.js";
+import { escapeRegex, getStem, walkFiles, scanWikilinks, WIKILINK_RE, CODE_FENCE_RE } from "../utils.js";
 
 const log = createChildLog({ service: "LinkEngine" });
 
-export class LinkEngineImpl implements LinkEngine {
-  private readonly vault: FileService;
+const WIKILINK_RANGE_RE = /\[\[.*?\]\]/g;
 
-  constructor(vaultService: FileService) {
-    this.vault = vaultService;
+export class LinkEngineImpl implements LinkEngine {
+  private readonly file: FileService;
+
+  constructor(fileService: FileService) {
+    this.file = fileService;
     log.info("LinkEngine initialized");
   }
 
@@ -227,7 +229,6 @@ export class LinkEngineImpl implements LinkEngine {
     let filesUpdated = 0;
     let linksUpdated = 0;
     const modifiedFiles: string[] = [];
-    const wikilinkRegex = new RegExp(WIKILINK_RE.source, "g");
 
     for (const filePath of files) {
       const content = await this.readFileContent(filePath);
@@ -237,11 +238,9 @@ export class LinkEngineImpl implements LinkEngine {
       let fileChanged = false;
       let fileLinksUpdated = 0;
 
-      // Replace wikilinks matching oldStem
       // We handle: [[oldStem]], [[oldStem|display]], [[oldStem#section]], [[oldStem#section|display]]
       // Also path-style: [[folder/oldStem]], [[folder/oldStem|display]], etc.
-      wikilinkRegex.lastIndex = 0;
-      updated = updated.replace(wikilinkRegex, (raw, target, section, display) => {
+      updated = updated.replace(WIKILINK_RE, (raw, target, section, display) => {
         const trimmedTarget = target.trim();
         const linkStem = this.stemFromTarget(trimmedTarget);
 
@@ -268,8 +267,8 @@ export class LinkEngineImpl implements LinkEngine {
       });
 
       if (fileChanged) {
-        const absPath = this.vault.resolvePath(filePath);
-        await this.vault.atomicWrite(absPath, updated);
+        const absPath = this.file.resolvePath(filePath);
+        await this.file.atomicWrite(absPath, updated);
         filesUpdated++;
         linksUpdated += fileLinksUpdated;
         modifiedFiles.push(filePath);
@@ -285,14 +284,14 @@ export class LinkEngineImpl implements LinkEngine {
   // =========================================================================
 
   /**
-   * Collect all vault file paths (vault-relative), optionally filtered by scope prefix.
+   * Collect all root-relative file paths, optionally filtered by scope prefix.
    */
   private async collectFiles(scope?: string): Promise<string[]> {
-    return walkVaultFiles(this.vault, scope);
+    return walkFiles(this.file, scope);
   }
 
   /**
-   * Build a Set of stems from a list of vault-relative file paths.
+   * Build a Set of stems from a list of root-relative file paths.
    */
   private buildStemSet(files: string[]): Set<string> {
     const stems = new Set<string>();
@@ -303,11 +302,11 @@ export class LinkEngineImpl implements LinkEngine {
   }
 
   /**
-   * Read the raw content of a vault-relative file path. Returns null on error.
+   * Read the raw content of a root-relative file path. Returns null on error.
    */
   private async readFileContent(relPath: string): Promise<string | null> {
     try {
-      const note = await this.vault.readNote(relPath);
+      const note = await this.file.readNote(relPath);
       return note.raw;
     } catch {
       return null;
@@ -340,9 +339,9 @@ export class LinkEngineImpl implements LinkEngine {
    */
   private getWikilinkRanges(line: string): Array<[number, number]> {
     const ranges: Array<[number, number]> = [];
-    const regex = /\[\[.*?\]\]/g;
+    WIKILINK_RANGE_RE.lastIndex = 0;
     let match: RegExpExecArray | null;
-    while ((match = regex.exec(line)) !== null) {
+    while ((match = WIKILINK_RANGE_RE.exec(line)) !== null) {
       ranges.push([match.index, match.index + match[0].length]);
     }
     return ranges;
