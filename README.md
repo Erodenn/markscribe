@@ -4,7 +4,7 @@
 [![License: MIT](https://badgen.net/github/license/Erodenn/markscribe)](LICENSE)
 [![Node.js](https://img.shields.io/node/v/markscribe)](https://nodejs.org/)
 
-A convention-aware markdown [MCP](https://modelcontextprotocol.io/) server for AI assistants. Point it at a directory of markdown files and it gives the AI read, write, search, wikilink, and validation tools — enforcing your conventions through user-defined YAML schemas rather than hard-coded vault assumptions.
+A convention-aware markdown [MCP](https://modelcontextprotocol.io/) server for AI assistants. Point it at a directory of markdown files and it gives the AI read, write, search, wikilink, and validation tools, enforcing your conventions through user-defined YAML schemas rather than hard-coded vault assumptions.
 
 Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, documentation repos, or any plain markdown directory. Nothing about the format is assumed. If your directory has its own rules — required frontmatter, hub notes, filename patterns, link constraints — you express them as schemas and MarkScribe enforces them.
 
@@ -14,11 +14,11 @@ Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, doc
 
 **Read, write, search.** 22 tools for AI assistants to operate on markdown: atomic read/write/move/delete, batch reads, frontmatter-aware patching, and full-text BM25 search across body and frontmatter.
 
-**Wikilink graph.** Backlinks, broken link detection, orphan finding, and plain-text mention discovery. The graph rebuilds on every call — no stale index, no cache to invalidate.
+**Wikilink graph.** Backlinks, broken link detection, orphan finding, and plain-text mention discovery. The graph rebuilds on every call, so there is no stale index or cache to invalidate.
 
 **Schema validation.** User-defined YAML note and folder schemas. Note schemas validate frontmatter fields and content rules; folder schemas classify directories, assign note schemas by role, and enforce structural constraints. `_conventions.md` files scope schemas to subtrees so the same directory can host multiple conventions.
 
-**Path security.** `.obsidian/`, `.git/`, `node_modules/`, `.DS_Store`, and `Thumbs.db` are always blocked. User config can extend the blocklist, never shrink it. Atomic writes everywhere — no torn files if a process dies mid-write.
+**Path security.** `.obsidian/`, `.git/`, `node_modules/`, `.DS_Store`, and `Thumbs.db` are always blocked. User config can extend the blocklist, never shrink it. Atomic writes everywhere, so a crashed process never leaves a torn file.
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, doc
 npm install -g markscribe
 ```
 
-Or run directly via `npx` — no install step. The MCP config below shows both.
+Or run directly via `npx`, no install step. The MCP config below shows both.
 
 ### Configure Your MCP Client
 
@@ -65,7 +65,7 @@ Add the following to your MCP client config. Works with Claude Code, Claude Desk
 }
 ```
 
-`--root` is the directory MarkScribe will serve. To load your own schemas, add `"--schemas-dir", "/path/to/schemas"` — otherwise `~/.markscribe/schemas/` is used.
+`--root` is the directory MarkScribe will serve. To load your own schemas, add `"--schemas-dir", "/path/to/schemas"`. Otherwise `~/.markscribe/schemas/` is used.
 
 ### Verify
 
@@ -103,7 +103,7 @@ The built-in security blocklist (`.obsidian/`, `.git/`, `node_modules/`, `.DS_St
 
 Schemas are YAML files defining conventions for notes and folders. Note schemas validate frontmatter and content; folder schemas classify directories and assign note schemas by role.
 
-**Note schema** — validates frontmatter fields and content rules:
+**Note schema.** Validates frontmatter fields and content rules:
 
 ```yaml
 name: blog-post
@@ -120,7 +120,7 @@ content:
       pattern: "\\[\\[.+?\\]\\]"
 ```
 
-**Folder schema** — enforces structural rules on directories:
+**Folder schema.** Enforces structural rules on directories:
 
 ```yaml
 name: project-folder
@@ -174,14 +174,14 @@ Notes opt into a schema via `note_schema: <name>` in frontmatter, or inherit one
 
 MarkScribe works with any tool that reads markdown files:
 
-- [Obsidian](https://obsidian.md/) — PKM app with graph view and community plugins
-- [Foam](https://foambubble.github.io/foam/) — VS Code extension for linked notes
-- [Logseq](https://logseq.com/) — Outliner with bidirectional links
+- [Obsidian](https://obsidian.md/): PKM app with graph view and community plugins
+- [Foam](https://foambubble.github.io/foam/): VS Code extension for linked notes
+- [Logseq](https://logseq.com/): outliner with bidirectional links
 - Any text editor or static site generator
 
 ## Architecture
 
-MarkScribe is stateless at runtime. There are no persistent indexes, caches, or file watchers — search and the link graph rebuild on every call, so results are always correct and never stale. Services (file, frontmatter, search, schema engine, link graph) are constructed via `buildServices()` and injected through a mutable `ServiceContainer`, which lets `switch_directory` rebuild the full service stack at runtime without re-registering tools. All file writes go through `atomicWrite` (write-to-temp-then-rename) so a crashed process never leaves a torn file. Convention knowledge is schema-driven — the server hard-codes no directory assumptions, only the inviolable path-security defaults.
+MarkScribe is stateless at runtime. There are no persistent indexes, caches, or file watchers; search and the link graph rebuild on every call, so results are always correct and never stale. Services (file, frontmatter, search, schema engine, link graph) are constructed via `buildServices()` and injected through a mutable `ServiceContainer`, which lets `switch_directory` rebuild the full service stack at runtime without re-registering tools. All file writes go through `atomicWrite` (write-to-temp-then-rename) so a crashed process never leaves a torn file. Convention knowledge is schema-driven: the server hard-codes no directory assumptions, only the inviolable path-security defaults.
 
 ## Development
 
@@ -204,7 +204,7 @@ npm run format:check
 npx tsc --noEmit
 ```
 
-Stdio transport — stdout is reserved for JSON-RPC, all human/debug output goes to stderr. Run tests after changes to services (`src/services/`) or the schema engine.
+Stdio transport: stdout is reserved for JSON-RPC, all human/debug output goes to stderr. Run tests after changes to services (`src/services/`) or the schema engine.
 
 ## Acknowledgements
 
