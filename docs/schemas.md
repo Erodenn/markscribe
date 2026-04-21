@@ -46,7 +46,7 @@ Each field is validated against its configured options.
 | `type` | `string`, `list`, `number`, `boolean` | YAML type of the value |
 | `required` | `true`, `false` | Whether the field must be present |
 | `format` | regex string | Value must match (strings only) |
-| `default` | any | Default applied by `create_note` templates. Supports `{{stem}}`, `{{today}}`, `{{folderName}}` |
+| `default` | any | Default applied by `create_note` templates. Supports `{{stem}}`, `{{filename}}`, `{{today}}`, `{{folderName}}` |
 | `when` | condition object | Gates whether validation applies. See conditions below |
 | `constraints` | array | Additional rules beyond type/format |
 
@@ -193,9 +193,8 @@ Notes don't have to opt in manually. A `_conventions.md` file in any directory b
 
 ```markdown
 ---
-convention:
-  folderSchema: project-folder
-  inherit: true
+folder_schema: project-folder
+inherit: true
 ---
 ```
 
@@ -203,11 +202,11 @@ convention:
 - Each note in a scoped folder is assigned a role (default `default`, or `hub` if it matches `hub.detection`) and validated against the corresponding note schema from `noteSchemas`.
 - `_conventions.md` files are never linted themselves.
 
-**Resolution order for `resolveNoteSchema(note)`:**
+**Resolution order (applied by `lint_note`):**
 
 1. Skip if the note is `_conventions.md`.
-2. If a convention applies: determine the role (`hub` if the note matches the folder's hub detection, else `default`), then look up `noteSchemas[role]`.
-3. If no convention applies: use `note_schema: <name>` from the note's frontmatter.
+2. If the note's frontmatter has `note_schema: <name>`, use that schema.
+3. Otherwise, consult the convention cascade: if a folder schema applies, determine the role (`hub` if the note matches the folder's hub detection, else `default`), then look up `noteSchemas[role]`.
 4. If neither applies: the note has no schema.
 
 ---
@@ -219,6 +218,6 @@ convention:
 3. Restart the server, or call `switch_directory` — schemas load at startup.
 4. Confirm it loaded with the `list_schemas` tool.
 5. For a note schema, opt a note in with `note_schema: <name>`, then call `lint_note`.
-6. For a folder schema, add `_conventions.md` to the folder with `convention.folderSchema: <name>`, then call `validate_folder` or `validate_area`.
+6. For a folder schema, add `_conventions.md` to the folder with `folder_schema: <name>`, then call `validate_folder` or `validate_area`.
 
 Bundled schemas (`vault-packet`, `vault-packet-folder`, `daily-note`, `moc`) ship with the server and serve as starting points — copy one into your schemas directory and adapt it.

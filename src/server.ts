@@ -16,6 +16,32 @@ const SERVER_NAME = "markscribe";
 const SERVER_VERSION = "0.1.0";
 
 /**
+ * Server-level instructions returned to the MCP client during `initialize`.
+ * Clients typically inject these into the model's system prompt, so they
+ * frame how the model reasons about markscribe's role before it sees
+ * individual tool descriptions.
+ */
+const FULL_INSTRUCTIONS =
+  "MarkScribe: convention-aware markdown server. It provides atomic note read/write/move/delete, " +
+  "batch reads, frontmatter and tag manipulation, full-text search, wikilink graph analysis " +
+  "(backlinks, broken links, orphans, unlinked mentions), and schema-driven validation of notes " +
+  "and folders. Conventions come from user-defined YAML schemas loaded from --schemas-dir " +
+  "(default ~/.markscribe/schemas/). A `_conventions.md` file at any subtree root binds folder " +
+  "schemas to that subtree. Search and the link graph rebuild on every call — no stale caches. " +
+  "For validation, scale the scope to the question: lint_note for one note, validate_folder for " +
+  "one folder, validate_area for a subtree, validate_all for the whole directory.";
+
+const LITE_INSTRUCTIONS =
+  "MarkScribe is running in --lite mode. Only schema validation and wikilink graph tools are " +
+  "exposed: schema lint (lint_note, validate_folder, validate_area, validate_all, list_schemas), " +
+  "link graph (get_backlinks, find_broken_links, find_orphans, find_unlinked_mentions), and meta " +
+  "(get_stats, switch_directory). Note read/write/edit/move/delete, directory listing, " +
+  "frontmatter and tag manipulation, and full-text search are intentionally NOT exposed — use " +
+  "your harness's native file tools (read, write, edit, listing, search) for those operations. " +
+  "Schemas load from --schemas-dir (default ~/.markscribe/schemas/); `_conventions.md` files " +
+  "scope folder schemas to subtrees. Search and the link graph rebuild on every call.";
+
+/**
  * Start the MarkScribe MCP server.
  * Root path from --root flag or cwd. Always has an active root.
  */
@@ -25,7 +51,10 @@ export async function startServer(): Promise<void> {
   // Set log level from CLI args (pino supports runtime level changes)
   markscribeLog.level = args.logLevel;
 
-  markscribeLog.info({ rootPath: args.root, schemasDir: args.schemasDir }, "starting markscribe server");
+  markscribeLog.info(
+    { rootPath: args.root, schemasDir: args.schemasDir, lite: args.lite },
+    "starting markscribe server",
+  );
 
   // Build service container — tools close over this, services are swapped on switch_directory
   const container: ServiceContainer = { services: null };
@@ -33,11 +62,19 @@ export async function startServer(): Promise<void> {
 
   // Build tool registry — tools reference `container` so they see mutations
   const registry = new Map<string, ToolHandler>();
-  registerTools(registry, container, (rootPath) => buildServices(rootPath, args.schemasDir));
+  registerTools(
+    registry,
+    container,
+    (rootPath) => buildServices(rootPath, args.schemasDir),
+    { lite: args.lite },
+  );
 
   const server = new Server(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: { tools: {} },
+      instructions: args.lite ? LITE_INSTRUCTIONS : FULL_INSTRUCTIONS,
+    },
   );
 
   // tools/list — enumerate registered tools

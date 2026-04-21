@@ -40,7 +40,7 @@ function makeGetBacklinksTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Verify the file exists with read_note"],
+            possibleSolutions: ["Check the path is root-relative and the file exists"],
           }) }],
           isError: true,
         };
@@ -84,7 +84,7 @@ function makeFindUnlinkedMentionsTool(container: ServiceContainer): ToolHandler 
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Verify the file exists with read_note"],
+            possibleSolutions: ["Check the path is root-relative and the file exists"],
           }) }],
           isError: true,
         };
@@ -128,7 +128,7 @@ function makeFindBrokenLinksTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the scope path with list_directory", "Omit scope to scan the entire directory"],
+            possibleSolutions: ["Check the scope path is root-relative", "Omit scope to scan the entire directory"],
           }) }],
           isError: true,
         };
@@ -172,7 +172,7 @@ function makeFindOrphansTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the scope path with list_directory", "Omit scope to scan the entire directory"],
+            possibleSolutions: ["Check the scope path is root-relative", "Omit scope to scan the entire directory"],
           }) }],
           isError: true,
         };

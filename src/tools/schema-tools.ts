@@ -68,7 +68,7 @@ function makeLintNoteTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Verify the file exists with read_note", "Use list_schemas to see available schemas"],
+            possibleSolutions: ["Check the path is root-relative and the file exists", "Use list_schemas to see available schemas"],
           }) }],
           isError: true,
         };
@@ -112,7 +112,7 @@ function makeValidateFolderTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Use list_schemas to see available schemas", "Use lint_note for individual note validation"],
+            possibleSolutions: ["Check the path is root-relative and points to a directory", "Use list_schemas to see available schemas", "Use lint_note for individual note validation"],
           }) }],
           isError: true,
         };
@@ -157,7 +157,7 @@ function makeValidateAreaTool(container: ServiceContainer): ToolHandler {
           content: [{ type: "text", text: JSON.stringify({
             root: getRoot(container),
             error: err instanceof Error ? err.message : String(err),
-            possibleSolutions: ["Check the path with list_directory", "Use validate_folder for a single folder", "Use list_schemas to see available schemas"],
+            possibleSolutions: ["Check the path is root-relative", "Use validate_folder for a single folder", "Use list_schemas to see available schemas"],
           }) }],
           isError: true,
         };

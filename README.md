@@ -12,7 +12,7 @@ Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, doc
 
 ## What It Does
 
-**Read, write, search.** 22 tools for AI assistants to operate on markdown: atomic read/write/move/delete, batch reads, frontmatter-aware patching, and full-text BM25 search across body and frontmatter.
+**Read, write, search.** 23 tools for AI assistants to operate on markdown: atomic read/write/move/delete, batch reads, frontmatter-aware patching, and full-text BM25 search across body and frontmatter.
 
 **Wikilink graph.** Backlinks, broken link detection, orphan finding, and plain-text mention discovery. The graph rebuilds on every call, so there is no stale index or cache to invalidate.
 
@@ -78,6 +78,21 @@ Ask your AI assistant to call `get_stats`. If it returns a note count and recent
 | `--root <path>` | Current working directory | Root directory to serve |
 | `--schemas-dir <path>` | `~/.markscribe/schemas/` | Directory to load schema YAML files from |
 | `--log-level <level>` | `info` | Log level (`debug`, `info`, `warn`, `error`, `fatal`) |
+| `--lite` | off | Trim the tool surface to lint, validation, and link-graph only |
+
+### Lite mode
+
+If your AI client already has native file read/write/search (like the Claude Code harness does), the note CRUD, frontmatter, and discovery tools are duplicative. `--lite` exposes only what MarkScribe uniquely provides — convention enforcement and wikilink analysis — and leaves file manipulation to the harness.
+
+```bash
+markscribe --lite --root /path/to/your/notes
+```
+
+**Kept (11):** `lint_note`, `validate_folder`, `validate_area`, `validate_all`, `list_schemas`, `get_backlinks`, `find_broken_links`, `find_orphans`, `find_unlinked_mentions`, `get_stats`, `switch_directory`.
+
+**Cut (12):** `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `read_multiple_notes`, `create_note`, `get_frontmatter`, `update_frontmatter`, `manage_tags`, `search_notes`, `list_directory`.
+
+The flag is a startup decision — restart the server to toggle it. Default behavior is unchanged for clients that don't pass `--lite`.
 
 ## Per-directory config
 

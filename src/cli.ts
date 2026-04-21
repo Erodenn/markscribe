@@ -9,6 +9,8 @@ export interface CliArgs {
   schemasDir: string;
   /** Log level — from --log-level or "info" */
   logLevel: string;
+  /** Lite mode — from --lite, restricts the tool surface to the lint/validation/link-graph allowlist */
+  lite: boolean;
 }
 
 export function parseCliArgs(): CliArgs {
@@ -17,6 +19,7 @@ export function parseCliArgs(): CliArgs {
       root: { type: "string" },
       "schemas-dir": { type: "string" },
       "log-level": { type: "string" },
+      lite: { type: "boolean" },
     },
     strict: false,
     allowPositionals: true,
@@ -26,6 +29,7 @@ export function parseCliArgs(): CliArgs {
   const schemasDir =
     (values["schemas-dir"] as string | undefined) ?? path.join(os.homedir(), ".markscribe", "schemas");
   const logLevel = (values["log-level"] as string | undefined) ?? "info";
+  const lite = (values.lite as boolean | undefined) ?? false;
 
-  return { root, schemasDir, logLevel };
+  return { root, schemasDir, logLevel, lite };
 }
