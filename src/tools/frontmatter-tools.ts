@@ -58,7 +58,16 @@ function makeGetFrontmatterTool(container: ServiceContainer): ToolHandler {
 
 const UpdateFrontmatterSchema = z.object({
   path: z.string().describe("Root-relative path to the note."),
-  fields: z.record(z.string(), z.unknown()).describe("Key-value pairs to set in the frontmatter."),
+  fields: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .default({})
+    .describe("Key-value pairs to set in the frontmatter. `null` is a valid value (not a delete sentinel) — use `remove` to drop keys."),
+  remove: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .describe("Keys to delete from the frontmatter. Runs after the merge/replace step, so a key in both `fields` and `remove` ends up removed."),
   merge: z
     .boolean()
     .optional()
@@ -70,17 +79,22 @@ function makeUpdateFrontmatterTool(container: ServiceContainer): ToolHandler {
   return {
     name: "update_frontmatter",
     description:
-      "Merges or replaces frontmatter fields. Pass `{ path, fields }` and optionally `merge` (boolean, default true). Set a field to `null` to remove it. Returns `{ root, path, frontmatter }` with the updated fields.",
+      "Sets and/or removes frontmatter keys. Pass `{ path, fields?, remove?, merge? }`. `fields` sets key-value pairs (null is a real value, pass-through to schema validation). `remove` is a list of keys to delete. `merge` (default true) merges with existing frontmatter; false replaces all fields. Returns `{ root, path, frontmatter }`.",
     inputSchema: UpdateFrontmatterSchema,
     async handler(args): Promise<ToolResponse> {
       try {
         const services = requireServices(container);
-        const { path: notePath, fields, merge } = UpdateFrontmatterSchema.parse(args);
+        const { path: notePath, fields, remove, merge } = UpdateFrontmatterSchema.parse(args);
         log.info(
-          { notePath, fieldCount: Object.keys(fields).length, merge },
+          {
+            notePath,
+            fieldCount: Object.keys(fields).length,
+            removeCount: remove.length,
+            merge,
+          },
           "update_frontmatter called",
         );
-        await services.frontmatter.updateFields(notePath, fields, merge);
+        await services.frontmatter.updateFields(notePath, fields, merge, remove);
         const updatedNote = await services.file.readNote(notePath);
         log.info({ path: notePath }, "update_frontmatter complete");
         return {

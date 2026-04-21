@@ -65,13 +65,27 @@ export class FrontmatterServiceImpl implements FrontmatterService {
     notePath: string,
     fields: Record<string, unknown>,
     merge = true,
+    remove: string[] = [],
   ): Promise<void> {
-    log.info({ path: notePath, merge, fieldCount: Object.keys(fields).length }, "updateFields");
+    log.info(
+      {
+        path: notePath,
+        merge,
+        fieldCount: Object.keys(fields).length,
+        removeCount: remove.length,
+      },
+      "updateFields",
+    );
 
     const note = await this.file.readNote(notePath);
     const { frontmatter, content } = note;
 
-    const updatedFrontmatter = merge ? { ...frontmatter, ...fields } : { ...fields };
+    const updatedFrontmatter: Record<string, unknown> = merge
+      ? { ...frontmatter, ...fields }
+      : { ...fields };
+    for (const key of remove) {
+      delete updatedFrontmatter[key];
+    }
 
     const newRaw = this.stringify(updatedFrontmatter, content);
     const fullPath = this.file.resolvePath(notePath);

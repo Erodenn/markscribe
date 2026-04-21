@@ -220,8 +220,13 @@ export interface FrontmatterService {
   /** Serialize frontmatter + body back to raw content */
   stringify(frontmatter: Record<string, unknown>, content: string): string;
 
-  /** Update specific frontmatter keys without touching content */
-  updateFields(path: string, fields: Record<string, unknown>, merge?: boolean): Promise<void>;
+  /** Update specific frontmatter keys without touching content. `remove` drops listed keys after the merge/replace step. */
+  updateFields(
+    path: string,
+    fields: Record<string, unknown>,
+    merge?: boolean,
+    remove?: string[],
+  ): Promise<void>;
 
   /** Add/remove/list tags (handles both YAML tags array and inline #tags) */
   manageTags(path: string, operation: TagOperation, tags?: string[]): Promise<TagResult>;

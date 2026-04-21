@@ -179,6 +179,56 @@ describe("FrontmatterServiceImpl", () => {
   });
 
   // =========================================================================
+  // updateFields — remove parameter
+  // =========================================================================
+
+  describe("updateFields — remove parameter", () => {
+    it("removes listed keys from frontmatter", async () => {
+      await writeFile(tmpDir, "note.md", "---\ntitle: T\nstatus: draft\n---\nBody");
+      await svc.updateFields("note.md", {}, true, ["status"]);
+      const raw = await readFile(tmpDir, "note.md");
+      const reparsed = svc.parse(raw);
+      expect(reparsed.frontmatter["title"]).toBe("T");
+      expect(reparsed.frontmatter["status"]).toBeUndefined();
+    });
+
+    it("preserves explicit null values (null is no longer a delete sentinel)", async () => {
+      await writeFile(tmpDir, "note.md", "---\ntitle: T\n---\nBody");
+      await svc.updateFields("note.md", { nullable: null });
+      const raw = await readFile(tmpDir, "note.md");
+      const reparsed = svc.parse(raw);
+      expect("nullable" in reparsed.frontmatter).toBe(true);
+      expect(reparsed.frontmatter["nullable"]).toBeNull();
+    });
+
+    it("combines set-and-remove in one call", async () => {
+      await writeFile(tmpDir, "note.md", "---\ntitle: Old\ndraft: true\n---\nBody");
+      await svc.updateFields("note.md", { status: "published" }, true, ["draft"]);
+      const raw = await readFile(tmpDir, "note.md");
+      const reparsed = svc.parse(raw);
+      expect(reparsed.frontmatter["status"]).toBe("published");
+      expect(reparsed.frontmatter["draft"]).toBeUndefined();
+      expect(reparsed.frontmatter["title"]).toBe("Old");
+    });
+
+    it("ignores remove keys that don't exist", async () => {
+      await writeFile(tmpDir, "note.md", "---\ntitle: T\n---\nBody");
+      await svc.updateFields("note.md", {}, true, ["nonexistent"]);
+      const raw = await readFile(tmpDir, "note.md");
+      const reparsed = svc.parse(raw);
+      expect(reparsed.frontmatter["title"]).toBe("T");
+    });
+
+    it("remove wins when a key appears in both fields and remove", async () => {
+      await writeFile(tmpDir, "note.md", "---\ntitle: T\n---\nBody");
+      await svc.updateFields("note.md", { status: "active" }, true, ["status"]);
+      const raw = await readFile(tmpDir, "note.md");
+      const reparsed = svc.parse(raw);
+      expect(reparsed.frontmatter["status"]).toBeUndefined();
+    });
+  });
+
+  // =========================================================================
   // manageTags — list
   // =========================================================================
 
