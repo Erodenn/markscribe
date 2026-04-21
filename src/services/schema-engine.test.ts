@@ -40,19 +40,6 @@ content:
   rules: []
 `;
 
-const SECOND_NOTE_SCHEMA_YAML = `
-name: second-note
-description: A second note schema
-type: note
-frontmatter:
-  fields:
-    author:
-      type: string
-      required: true
-content:
-  rules: []
-`;
-
 function makeVaultService(vaultPath: string): FileServiceImpl {
   const filter = new PathFilterImpl({ blockedPaths: [], allowedExtensions: [] });
   return new FileServiceImpl(vaultPath, filter);
