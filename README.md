@@ -20,6 +20,8 @@ Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, doc
 
 **Path security.** `.obsidian/`, `.git/`, `node_modules/`, `.DS_Store`, and `Thumbs.db` are always blocked. User config can extend the blocklist, never shrink it. Atomic writes everywhere, so a crashed process never leaves a torn file.
 
+**Lite mode.** `--lite` trims the tool surface from 23 to 11, keeping schema validation, the wikilink graph, and directory meta. Note CRUD, frontmatter editing, and search drop out, since harnesses like Claude Code already ship native file tools for those.
+
 ## Quick Start
 
 ### Prerequisites
