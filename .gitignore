@@ -50,9 +50,11 @@ pnpm-debug.log*
 .eslintcache
 .prettiercache
 
-# Markdown (except README)
+# Markdown (except README and docs/)
 *.md
 !README.md
+!docs/
+!docs/**/*.md
 
 # Claude Code
 .claude/
