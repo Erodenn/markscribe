@@ -1,7 +1,6 @@
 # MarkScribe
 
 [![npm version](https://img.shields.io/npm/v/markscribe)](https://www.npmjs.com/package/markscribe)
-[![npm downloads](https://img.shields.io/npm/dt/markscribe)](https://www.npmjs.com/package/markscribe)
 [![License: MIT](https://badgen.net/github/license/Erodenn/markscribe)](LICENSE)
 [![Node.js](https://img.shields.io/node/v/markscribe)](https://nodejs.org/)
 
