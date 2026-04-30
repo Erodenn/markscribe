@@ -173,3 +173,62 @@ describe("NoteSchemaEngineImpl checkContentRule noBrokenWikilinks", () => {
     }
   });
 });
+
+function dateSchema(): NoteSchema {
+  return {
+    name: "date-fields",
+    description: "test",
+    type: "note",
+    frontmatter: {
+      fields: {
+        created: { type: "date", required: true, format: "\\d{4}-\\d{2}-\\d{2}" },
+      },
+    },
+    content: { rules: [] },
+  };
+}
+
+describe("NoteSchemaEngineImpl date field type", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await makeTempDir("markscribe-date-type-test-");
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("passes for unquoted YAML date scalars", async () => {
+    await writeFile(tmpDir, "Note.md", "---\ncreated: 2026-03-09\n---\nbody");
+
+    const file = makeFile(tmpDir);
+    const engine = new NoteSchemaEngineImpl(file);
+    const result = await engine.lintNote("Note.md", dateSchema());
+
+    const typeCheck = result.checks.find((c) => c.name === "field_created_type");
+    const formatCheck = result.checks.find((c) => c.name === "field_created_format");
+    expect(typeCheck?.pass).toBe(true);
+    expect(formatCheck?.pass).toBe(true);
+    expect(result.pass).toBe(true);
+  });
+
+  it("fails type check when value is not a date", async () => {
+    await writeFile(tmpDir, "Note.md", '---\ncreated: "not a date"\n---\nbody');
+
+    const file = makeFile(tmpDir);
+    const engine = new NoteSchemaEngineImpl(file);
+    const result = await engine.lintNote("Note.md", dateSchema());
+
+    const typeCheck = result.checks.find((c) => c.name === "field_created_type");
+    expect(typeCheck?.pass).toBe(false);
+    expect(result.pass).toBe(false);
+  });
+
+  it("getTemplate seeds a date field with the current date", () => {
+    const file = makeFile(tmpDir);
+    const engine = new NoteSchemaEngineImpl(file);
+    const tpl = engine.getTemplate(dateSchema());
+    expect(tpl.frontmatter.created).toBeInstanceOf(Date);
+  });
+});

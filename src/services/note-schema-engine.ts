@@ -98,6 +98,9 @@ export class NoteSchemaEngineImpl {
           case "boolean":
             frontmatter[fieldName] = false;
             break;
+          case "date":
+            frontmatter[fieldName] = new Date();
+            break;
         }
       }
     }
@@ -157,6 +160,9 @@ export class NoteSchemaEngineImpl {
       case "boolean":
         typeOk = typeof value === "boolean";
         break;
+      case "date":
+        typeOk = value instanceof Date && !Number.isNaN(value.getTime());
+        break;
     }
 
     checks.push({
@@ -169,16 +175,24 @@ export class NoteSchemaEngineImpl {
 
     if (!typeOk) return checks;
 
-    if (fieldDef.format && typeof value === "string") {
-      const formatRe = this.getCachedRegex(fieldDef.format);
-      const formatOk = formatRe.test(value);
-      checks.push({
-        name: `field_${fieldName}_format`,
-        pass: formatOk,
-        detail: formatOk
-          ? ""
-          : `Field "${fieldName}" value "${value}" does not match format "${fieldDef.format}"`,
-      });
+    if (fieldDef.format) {
+      const stringValue =
+        value instanceof Date
+          ? value.toISOString().slice(0, 10)
+          : typeof value === "string"
+            ? value
+            : null;
+      if (stringValue !== null) {
+        const formatRe = this.getCachedRegex(fieldDef.format);
+        const formatOk = formatRe.test(stringValue);
+        checks.push({
+          name: `field_${fieldName}_format`,
+          pass: formatOk,
+          detail: formatOk
+            ? ""
+            : `Field "${fieldName}" value "${stringValue}" does not match format "${fieldDef.format}"`,
+        });
+      }
     }
 
     if (fieldDef.constraints) {
@@ -282,14 +296,21 @@ export class NoteSchemaEngineImpl {
     }
 
     if ("pattern" in constraint) {
+      const stringValue =
+        value instanceof Date
+          ? value.toISOString().slice(0, 10)
+          : typeof value === "string"
+            ? value
+            : null;
+      if (stringValue === null) return null;
       const re = this.getCachedRegex(constraint.pattern);
-      const pass = typeof value === "string" && re.test(value);
+      const pass = re.test(stringValue);
       return {
         name: `field_${fieldName}_pattern`,
         pass,
         detail: pass
           ? ""
-          : `Field "${fieldName}" value "${String(value)}" does not match pattern "${constraint.pattern}"`,
+          : `Field "${fieldName}" value "${stringValue}" does not match pattern "${constraint.pattern}"`,
       };
     }
 

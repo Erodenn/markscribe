@@ -45,7 +45,7 @@ export const ZodSchemaConstraint = z.union([
 ]);
 
 export const ZodSchemaField = z.object({
-  type: z.enum(["string", "list", "number", "boolean"]),
+  type: z.enum(["string", "list", "number", "boolean", "date"]),
   required: z.boolean().default(false),
   format: z.string().optional(),
   default: z.unknown().optional(),

@@ -43,9 +43,11 @@ Each field is validated against its configured options.
 
 | Option | Values | Purpose |
 |---|---|---|
-| `type` | `string`, `list`, `number`, `boolean` | YAML type of the value |
+| `type` | `string`, `list`, `number`, `boolean`, `date` | YAML type of the value |
 | `required` | `true`, `false` | Whether the field must be present |
-| `format` | regex string | Value must match (strings only) |
+| `format` | regex string | Value must match (strings and dates; dates coerced to `YYYY-MM-DD` first) |
+
+The `date` type expects YAML date scalars — unquoted ISO dates like `created: 2026-03-09` that `js-yaml` parses into JS `Date` objects. Use `string` if you want strict string handling for quoted ISO dates. For `date` fields, `format` and `pattern` constraints are tested against the date's `YYYY-MM-DD` ISO form.
 | `default` | any | Default applied by `create_note` templates. Supports `{{stem}}`, `{{filename}}`, `{{today}}`, `{{folderName}}` |
 | `when` | condition object | Gates whether validation applies. See conditions below |
 | `constraints` | array | Additional rules beyond type/format |

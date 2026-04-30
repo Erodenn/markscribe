@@ -293,7 +293,7 @@ export interface SchemaFrontmatter {
 
 export interface SchemaField {
   /** YAML type */
-  type: "string" | "list" | "number" | "boolean";
+  type: "string" | "list" | "number" | "boolean" | "date";
   /** Whether field is required (default: false) */
   required: boolean;
   /** Regex pattern the value must match (strings only) */

@@ -7,7 +7,8 @@ export const vaultPacketSchema: NoteSchema = {
   frontmatter: {
     fields: {
       tags: { type: "list", required: true, constraints: [{ minItems: 1 }] },
-      created: { type: "string", required: true, format: "\\d{4}-\\d{2}-\\d{2}" },
+      created: { type: "date", required: true, format: "\\d{4}-\\d{2}-\\d{2}" },
+      updated: { type: "date", required: true, format: "\\d{4}-\\d{2}-\\d{2}" },
       source: { type: "string", required: false },
     },
   },
