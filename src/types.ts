@@ -519,7 +519,7 @@ export interface Check {
   detail: string;
 }
 
-export type FolderType = "packet" | "superfolder" | "supplemental" | "unclassified";
+export type FolderType = "packet" | "section" | "superfolder" | "supplemental" | "unclassified";
 
 /** Result of validating a folder/packet */
 export interface FolderValidation {

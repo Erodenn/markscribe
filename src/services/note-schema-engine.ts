@@ -25,6 +25,13 @@ const log = createChildLog({ service: "NoteSchemaEngine" });
 const EMPTY_WIKILINK_RE = /\[\[\s*(?:[|#][^\]]+)?\s*\]\]/;
 const WIKILINK_OPEN_RE = /\[\[/g;
 const WIKILINK_CLOSE_RE = /\]\]/g;
+const IMAGE_EMBED_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
+
+function getExtension(target: string): string {
+  const idx = target.lastIndexOf(".");
+  if (idx < 0) return "";
+  return target.slice(idx).toLowerCase();
+}
 
 export class NoteSchemaEngineImpl {
   private readonly regexCache = new Map<string, RegExp>();
@@ -392,7 +399,17 @@ export class NoteSchemaEngineImpl {
         }
 
         const broken: string[] = [];
+        const contentLines = content.split("\n");
         for (const scanned of scanWikilinks(content)) {
+          // Skip image embeds — Obsidian resolves these against attachment
+          // folders, not the markdown vault index. An embed has `!` directly
+          // before the `[[`.
+          if (IMAGE_EMBED_EXTS.has(getExtension(scanned.target))) {
+            const lineContent = contentLines[scanned.line - 1] ?? "";
+            if (scanned.column > 0 && lineContent[scanned.column - 1] === "!") {
+              continue;
+            }
+          }
           if (!vaultIndex.resolve(scanned.target)) {
             broken.push(scanned.target);
           }

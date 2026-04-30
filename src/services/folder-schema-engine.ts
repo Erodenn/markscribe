@@ -76,8 +76,6 @@ export class FolderSchemaEngineImpl {
       .map((e) => e.path);
     const subDirs = listing.entries.filter((e) => e.type === "directory").map((e) => e.path);
 
-    const folderType = this.classifyFolder(folderName, folderSchema, mdFiles, subDirs);
-
     if (folderSchema?.classification.skip.includes(folderName)) {
       log.info({ path: folderPath, folderType: "unclassified" }, "validateFolder: skip folder");
       return {
@@ -88,6 +86,41 @@ export class FolderSchemaEngineImpl {
         notes: {},
         structural: [],
       };
+    }
+
+    // Pre-read all notes (used by classification, lint, and structural checks)
+    const notesMap = new Map<string, ParsedNote>();
+    for (const f of mdFiles) {
+      try {
+        notesMap.set(f, await this.file.readNote(f));
+      } catch {
+        // skip unreadable
+      }
+    }
+
+    // Detect hub up front — needed for section vs packet classification
+    let hubPath: string | null = null;
+    let hubContent = "";
+    let hubError: string | null = null;
+    if (folderSchema) {
+      const detection = await this.detectHub(mdFiles, folderName, folderSchema, notesMap);
+      hubPath = detection.hubPath;
+      hubContent = detection.hubContent;
+      hubError = detection.hubError;
+    }
+
+    let folderType = this.classifyFolder(folderName, folderSchema, mdFiles, subDirs);
+
+    // Promote packet candidates without a hub to "section" if they sit beneath
+    // a packet ancestor — sections lint their notes but skip structural rules.
+    if (
+      folderType === "packet" &&
+      folderSchema?.hub &&
+      hubPath === null &&
+      !hubError &&
+      (await this.hasPacketAncestor(folderPath, folderSchema))
+    ) {
+      folderType = "section";
     }
 
     if (folderType === "supplemental") {
@@ -102,16 +135,6 @@ export class FolderSchemaEngineImpl {
       };
     }
 
-    // Pre-read all notes (used by both lint and structural checks)
-    const notesMap = new Map<string, ParsedNote>();
-    for (const f of mdFiles) {
-      try {
-        notesMap.set(f, await this.file.readNote(f));
-      } catch {
-        // skip unreadable
-      }
-    }
-
     const notes: Record<string, import("../types.js").LintResult> = {};
     for (const notePath of mdFiles) {
       notes[notePath] = await lintNoteFn(notePath, notesMap.get(notePath));
@@ -123,15 +146,7 @@ export class FolderSchemaEngineImpl {
       folderSchema?.structural &&
       folderSchema.structural.length > 0
     ) {
-      const { hubPath, hubContent, hubError } = await this.detectHub(
-        mdFiles,
-        folderName,
-        folderSchema,
-        notesMap,
-      );
-
       if (hubError) {
-        // Add hub error as a check for every structural rule that needs it
         for (const rule of folderSchema.structural) {
           structural.push({ name: rule.name, pass: false, detail: hubError });
         }
@@ -211,6 +226,43 @@ export class FolderSchemaEngineImpl {
     }
 
     return "packet";
+  }
+
+  /**
+   * Walk up parent directories looking for a folder whose hub file exists
+   * (per the schema's pattern-based hub rules). Used to distinguish
+   * organizational sections (inside a packet) from top-level packet candidates.
+   */
+  async hasPacketAncestor(folderPath: string, schema: FolderSchema): Promise<boolean> {
+    if (!schema.hub) return false;
+    const patternRules = schema.hub.detection.filter(
+      (r): r is { pattern: string } => "pattern" in r,
+    );
+    if (patternRules.length === 0) return false;
+
+    let current = path.dirname(folderPath);
+    let lastSeen: string | null = null;
+    while (current && current !== "." && current !== "/" && current !== lastSeen) {
+      lastSeen = current;
+      const parentName = path.basename(current);
+      let listing;
+      try {
+        listing = await this.file.listDirectory(current);
+      } catch {
+        return false;
+      }
+      const fileBasenames = new Set(
+        listing.entries.filter((e) => e.type === "file").map((e) => e.name),
+      );
+      for (const rule of patternRules) {
+        const target = expandHubPattern(rule.pattern, parentName);
+        if (fileBasenames.has(target)) return true;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+    return false;
   }
 
   async detectHub(
