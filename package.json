@@ -1,6 +1,6 @@
 {
   "name": "markscribe",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Convention-aware markdown MCP server",
   "type": "module",
   "main": "dist/server.js",

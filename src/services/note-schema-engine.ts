@@ -22,7 +22,9 @@ import type { VaultIndex } from "./vault-index.js";
 
 const log = createChildLog({ service: "NoteSchemaEngine" });
 
-const EMPTY_WIKILINK_RE = /\[\[\s*(?:[|#][^\]]+)?\s*\]\]/;
+// Empty wikilinks: `[[]]` (no target) or `[[|alias]]` (alias without target).
+// `[[#section]]` and `[[#section|alias]]` are valid in-document section links and must NOT match.
+const EMPTY_WIKILINK_RE = /\[\[\s*(?:\|[^\]]+)?\s*\]\]/;
 const WIKILINK_OPEN_RE = /\[\[/g;
 const WIKILINK_CLOSE_RE = /\]\]/g;
 const IMAGE_EMBED_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
