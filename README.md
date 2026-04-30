@@ -12,7 +12,7 @@ Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, doc
 
 ## What It Does
 
-**Read, write, search.** 23 tools for AI assistants to operate on markdown: atomic read/write/move/delete, batch reads, frontmatter-aware patching, and full-text BM25 search across body and frontmatter.
+**Read, write, search.** 24 tools for AI assistants to operate on markdown: atomic read/write/move/delete, batch reads, frontmatter-aware patching, and full-text BM25 search across body and frontmatter.
 
 **Wikilink graph.** Backlinks, broken link detection, orphan finding, and plain-text mention discovery. The graph rebuilds on every call, so there is no stale index or cache to invalidate.
 
@@ -20,7 +20,7 @@ Works with Obsidian vaults, Foam workspaces, Logseq graphs, digital gardens, doc
 
 **Path security.** `.obsidian/`, `.git/`, `node_modules/`, `.DS_Store`, and `Thumbs.db` are always blocked. User config can extend the blocklist, never shrink it. Atomic writes everywhere, so a crashed process never leaves a torn file.
 
-**Lite mode.** `--lite` trims the tool surface from 23 to 11, keeping schema validation, the wikilink graph, and directory meta. Note CRUD, frontmatter editing, and search drop out, since harnesses like Claude Code already ship native file tools for those.
+**Lite mode.** `--lite` trims the tool surface from 24 to 12, keeping schema validation, the wikilink graph, and directory meta. Note CRUD, frontmatter editing, and search drop out, since harnesses like Claude Code already ship native file tools for those.
 
 ## Quick Start
 
@@ -90,7 +90,7 @@ If your AI client already has native file read/write/search (like the Claude Cod
 markscribe --lite --root /path/to/your/notes
 ```
 
-**Kept (11):** `lint_note`, `validate_folder`, `validate_area`, `validate_all`, `list_schemas`, `get_backlinks`, `find_broken_links`, `find_orphans`, `find_unlinked_mentions`, `get_stats`, `switch_directory`.
+**Kept (12):** `lint_note`, `validate_folder`, `validate_area`, `validate_all`, `list_schemas`, `get_backlinks`, `find_broken_links`, `find_orphans`, `find_unlinked_mentions`, `find_bidirectional_mentions`, `get_stats`, `switch_directory`.
 
 **Cut (12):** `read_note`, `write_note`, `patch_note`, `delete_note`, `move_note`, `read_multiple_notes`, `create_note`, `get_frontmatter`, `update_frontmatter`, `manage_tags`, `search_notes`, `list_directory`.
 
@@ -186,6 +186,7 @@ Notes opt into a schema via `note_schema: <name>` in frontmatter, or inherit one
 | `find_broken_links` | Find wikilinks to non-existent notes |
 | `find_orphans` | Find notes with no incoming links |
 | `find_unlinked_mentions` | Find plain-text mentions that should be wikilinks |
+| `find_bidirectional_mentions` | Two-direction mention sweep for batch new-note workflows |
 
 ## Compatible viewers
 

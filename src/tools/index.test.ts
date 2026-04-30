@@ -33,6 +33,7 @@ const FULL_TOOL_NAMES: ReadonlySet<string> = new Set([
   "find_unlinked_mentions",
   "find_broken_links",
   "find_orphans",
+  "find_bidirectional_mentions",
 ]);
 
 function buildRegistry(lite: boolean): Map<string, ToolHandler> {
@@ -46,18 +47,18 @@ function buildRegistry(lite: boolean): Map<string, ToolHandler> {
 }
 
 describe("registerTools / LITE_TOOL_NAMES", () => {
-  it("registers the full 23-tool surface in full mode", () => {
+  it("registers the full 24-tool surface in full mode", () => {
     const registry = buildRegistry(false);
     const names = new Set(registry.keys());
     expect(names).toEqual(FULL_TOOL_NAMES);
-    expect(names.size).toBe(23);
+    expect(names.size).toBe(24);
   });
 
   it("registers exactly the lite allowlist in lite mode", () => {
     const registry = buildRegistry(true);
     const names = new Set(registry.keys());
     expect(names).toEqual(new Set(LITE_TOOL_NAMES));
-    expect(names.size).toBe(11);
+    expect(names.size).toBe(12);
   });
 
   it("LITE_TOOL_NAMES is a strict subset of the full tool set", () => {

@@ -635,3 +635,133 @@ describe("LinkEngineImpl.propagateRename", () => {
     expect(content).toBe("See [[NewName]].");
   });
 });
+
+// ============================================================================
+// findBidirectionalMentions
+// ============================================================================
+
+describe("LinkEngineImpl.findBidirectionalMentions", () => {
+  let tmpDir: string;
+  let engine: LinkEngineImpl;
+
+  beforeEach(async () => {
+    tmpDir = await makeTempDir("markscribe-link-test-");
+    engine = makeEngine(tmpDir);
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("finds mentions in both directions", async () => {
+    await writeFile(tmpDir, "Existing.md", "I read NewNote yesterday.");
+    await writeFile(tmpDir, "NewNote.md", "Reference to Existing here.");
+
+    const r = await engine.findBidirectionalMentions(["NewNote.md"], ["Existing"]);
+
+    expect(r.existing_to_new).toHaveLength(1);
+    expect(r.existing_to_new[0].note).toBe("Existing.md");
+    expect(r.existing_to_new[0].newTarget).toBe("NewNote.md");
+    expect(r.existing_to_new[0].term).toBe("NewNote");
+    expect(r.existing_to_new[0].line).toBe(1);
+
+    expect(r.new_to_existing).toHaveLength(1);
+    expect(r.new_to_existing[0].note).toBe("NewNote.md");
+    expect(r.new_to_existing[0].target).toBe("Existing");
+  });
+
+  it("excludes new-note files from the existing-side scan", async () => {
+    await writeFile(tmpDir, "NewA.md", "Mentions NewB once.");
+    await writeFile(tmpDir, "NewB.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["NewA.md", "NewB.md"], []);
+
+    // NewA mentioning NewB is "new-to-new" — should not appear in existing_to_new
+    expect(r.existing_to_new).toHaveLength(0);
+  });
+
+  it("dedup: free term equal to new-note stem yields a single title classification", async () => {
+    await writeFile(tmpDir, "Existing.md", "Mentions Topic plainly.");
+    await writeFile(tmpDir, "Topic.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["Topic.md"], ["Topic"]);
+
+    // Should appear in existing_to_new (title), not duplicated as new_to_existing
+    expect(r.existing_to_new).toHaveLength(1);
+    expect(r.existing_to_new[0].newTarget).toBe("Topic.md");
+    expect(r.new_to_existing).toHaveLength(0);
+  });
+
+  it("uses whole-word boundaries", async () => {
+    await writeFile(tmpDir, "Existing.md", "Subtopic and Topical not Topic.");
+    await writeFile(tmpDir, "Topic.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["Topic.md"], []);
+
+    expect(r.existing_to_new).toHaveLength(1);
+    expect(r.existing_to_new[0].column).toBeGreaterThan(0);
+  });
+
+  it("is case-insensitive", async () => {
+    await writeFile(tmpDir, "Existing.md", "topic and TOPIC and Topic.");
+    await writeFile(tmpDir, "Topic.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["Topic.md"], []);
+    expect(r.existing_to_new).toHaveLength(3);
+  });
+
+  it("skips already-wikilinked occurrences", async () => {
+    await writeFile(tmpDir, "Existing.md", "[[Topic]] is wikilinked.");
+    await writeFile(tmpDir, "Topic.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["Topic.md"], []);
+    expect(r.existing_to_new).toHaveLength(0);
+  });
+
+  it("skips occurrences inside fenced code blocks", async () => {
+    await writeFile(
+      tmpDir,
+      "Existing.md",
+      "```\nTopic in code\n```\nTopic outside.",
+    );
+    await writeFile(tmpDir, "Topic.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["Topic.md"], []);
+    expect(r.existing_to_new).toHaveLength(1);
+    expect(r.existing_to_new[0].line).toBe(4);
+  });
+
+  it("applies scope filter to existing-side scan", async () => {
+    await writeFile(tmpDir, "in/Existing.md", "Topic here.");
+    await writeFile(tmpDir, "out/Other.md", "Topic here too.");
+    await writeFile(tmpDir, "Topic.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["Topic.md"], [], "in");
+    expect(r.existing_to_new).toHaveLength(1);
+    expect(r.existing_to_new[0].note).toBe("in/Existing.md");
+  });
+
+  it("handles empty newNotes (free-term-only sweep is a no-op for new side)", async () => {
+    await writeFile(tmpDir, "Existing.md", "Some Term here.");
+
+    const r = await engine.findBidirectionalMentions([], ["Term"]);
+    expect(r.existing_to_new).toHaveLength(0);
+    expect(r.new_to_existing).toHaveLength(0);
+  });
+
+  it("handles empty terms (one-sided new-title sweep)", async () => {
+    await writeFile(tmpDir, "Existing.md", "I read NewNote today.");
+    await writeFile(tmpDir, "NewNote.md", "Body.");
+
+    const r = await engine.findBidirectionalMentions(["NewNote.md"], []);
+    expect(r.existing_to_new).toHaveLength(1);
+    expect(r.new_to_existing).toHaveLength(0);
+  });
+
+  it("handles both empty (returns empty result)", async () => {
+    await writeFile(tmpDir, "A.md", "Anything.");
+    const r = await engine.findBidirectionalMentions([], []);
+    expect(r.existing_to_new).toHaveLength(0);
+    expect(r.new_to_existing).toHaveLength(0);
+  });
+});

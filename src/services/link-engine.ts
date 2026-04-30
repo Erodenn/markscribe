@@ -7,6 +7,9 @@ import type {
   UnlinkedMention,
   BrokenLink,
   RenameResult,
+  BidirectionalMentions,
+  MentionToNew,
+  MentionToExisting,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
 import { escapeRegex, getStem, walkFiles, scanWikilinks, WIKILINK_RE, CODE_FENCE_RE } from "../utils.js";
@@ -220,6 +223,140 @@ export class LinkEngineImpl implements LinkEngine {
     const orphans = files.filter((f) => (inDegree.get(f) ?? 0) === 0);
     log.info({ scope, orphanCount: orphans.length }, "findOrphans complete");
     return orphans;
+  }
+
+  async findBidirectionalMentions(
+    newNotes: string[],
+    terms: string[],
+    scope?: string,
+  ): Promise<BidirectionalMentions> {
+    log.info(
+      { newNoteCount: newNotes.length, termCount: terms.length, scope },
+      "findBidirectionalMentions",
+    );
+
+    interface TermEntry {
+      displayTerm: string;
+      newNotePath: string | null;
+    }
+
+    const termMap = new Map<string, TermEntry>();
+
+    for (const term of terms) {
+      if (typeof term !== "string") continue;
+      const trimmed = term.trim();
+      if (!trimmed) continue;
+      termMap.set(trimmed.toLowerCase(), { displayTerm: trimmed, newNotePath: null });
+    }
+
+    for (const notePath of newNotes) {
+      const stem = getStem(notePath);
+      if (!stem) continue;
+      termMap.set(stem.toLowerCase(), { displayTerm: stem, newNotePath: notePath });
+    }
+
+    if (termMap.size === 0) {
+      return { existing_to_new: [], new_to_existing: [] };
+    }
+
+    const termRegexes: Array<{ entry: TermEntry; re: RegExp }> = [];
+    for (const [, entry] of termMap) {
+      const re = new RegExp(
+        `(?<![\\[|])\\b${escapeRegex(entry.displayTerm)}\\b(?![\\]|])`,
+        "gi",
+      );
+      termRegexes.push({ entry, re });
+    }
+
+    const newNoteSet = new Set(newNotes);
+
+    const allFiles = await this.collectFiles(scope);
+    const existingFiles = allFiles.filter((p) => !newNoteSet.has(p));
+
+    const existing_to_new: MentionToNew[] = [];
+    const new_to_existing: MentionToExisting[] = [];
+
+    for (const filePath of existingFiles) {
+      const content = await this.readFileContent(filePath);
+      if (!content) continue;
+      const lines = content.split("\n");
+      let inCodeBlock = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (CODE_FENCE_RE.test(line.trim())) {
+          inCodeBlock = !inCodeBlock;
+          continue;
+        }
+        if (inCodeBlock) continue;
+
+        const wikilinkRanges = this.getWikilinkRanges(line);
+
+        for (const { entry, re } of termRegexes) {
+          if (entry.newNotePath === null) continue;
+          re.lastIndex = 0;
+          let match: RegExpExecArray | null;
+          while ((match = re.exec(line)) !== null) {
+            const col = match.index;
+            if (this.isInsideWikilink(col, match[0].length, wikilinkRanges)) continue;
+            existing_to_new.push({
+              note: filePath,
+              newTarget: entry.newNotePath,
+              term: match[0],
+              line: i + 1,
+              column: col,
+              context: line,
+            });
+          }
+        }
+      }
+    }
+
+    for (const newPath of newNotes) {
+      const content = await this.readFileContent(newPath);
+      if (!content) continue;
+      const lines = content.split("\n");
+      let inCodeBlock = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (CODE_FENCE_RE.test(line.trim())) {
+          inCodeBlock = !inCodeBlock;
+          continue;
+        }
+        if (inCodeBlock) continue;
+
+        const wikilinkRanges = this.getWikilinkRanges(line);
+
+        for (const { entry, re } of termRegexes) {
+          if (entry.newNotePath !== null) continue;
+          re.lastIndex = 0;
+          let match: RegExpExecArray | null;
+          while ((match = re.exec(line)) !== null) {
+            const col = match.index;
+            if (this.isInsideWikilink(col, match[0].length, wikilinkRanges)) continue;
+            new_to_existing.push({
+              note: newPath,
+              term: match[0],
+              target: entry.displayTerm,
+              line: i + 1,
+              column: col,
+              context: line,
+            });
+          }
+        }
+      }
+    }
+
+    log.info(
+      {
+        existingCount: existing_to_new.length,
+        newCount: new_to_existing.length,
+      },
+      "findBidirectionalMentions complete",
+    );
+
+    return { existing_to_new, new_to_existing };
   }
 
   async propagateRename(oldStem: string, newStem: string, scope?: string): Promise<RenameResult> {

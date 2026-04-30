@@ -59,6 +59,7 @@ export const ZodContentRule = z.object({
     "noPattern",
     "noSelfWikilink",
     "noMalformedWikilinks",
+    "noBrokenWikilinks",
     "minWordCount",
   ]),
   name: z.string().optional(),

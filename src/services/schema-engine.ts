@@ -19,6 +19,7 @@ import { bundledSchemas } from "../bundled-schemas/index.js";
 import { NoteSchemaEngineImpl } from "./note-schema-engine.js";
 import { FolderSchemaEngineImpl } from "./folder-schema-engine.js";
 import { ConventionCascadeImpl } from "./convention-cascade.js";
+import { buildVaultIndex, type VaultIndex } from "./vault-index.js";
 
 const log = createChildLog({ service: "SchemaEngine" });
 
@@ -123,8 +124,14 @@ export class SchemaEngineImpl implements SchemaEngine {
       schema = this.resolveNoteSchema(notePath);
     }
 
+    // Lazily build the vault index iff the resolved schema needs it
+    let vaultIndex: VaultIndex | undefined;
+    if (schema && this.schemaNeedsVaultIndex(schema)) {
+      vaultIndex = await buildVaultIndex(this.file);
+    }
+
     // Delegate to note engine, passing pre-read note
-    return this.noteEngine.lintNote(notePath, schema, note);
+    return this.noteEngine.lintNote(notePath, schema, note, vaultIndex);
   }
 
   // ==========================================================================
@@ -134,18 +141,20 @@ export class SchemaEngineImpl implements SchemaEngine {
   async validateFolder(folderPath: string): Promise<FolderValidation> {
     const convention = this.cascade.getForFolder(folderPath);
     const folderSchema = convention?.folderSchema ?? null;
+    const vaultIndex = await this.maybeBuildVaultIndex();
     return this.folderEngine.validateFolder(
       folderPath,
       folderSchema,
-      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote),
+      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote, vaultIndex),
     );
   }
 
   async validateArea(areaPath: string): Promise<AreaValidation> {
+    const vaultIndex = await this.maybeBuildVaultIndex();
     return this.folderEngine.validateArea(
       areaPath,
       this.cascade,
-      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote),
+      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote, vaultIndex),
       (folderPath) => this.cascade.getForFolder(folderPath)?.folderSchema ?? null,
     );
   }
@@ -153,10 +162,11 @@ export class SchemaEngineImpl implements SchemaEngine {
   async validateAll(): Promise<FullValidation> {
     log.info("validateAll start");
 
+    const vaultIndex = await this.maybeBuildVaultIndex();
     const areaResult = await this.folderEngine.validateArea(
       "",
       this.cascade,
-      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote),
+      async (p, preReadNote) => this.lintNoteWithPreRead(p, preReadNote, vaultIndex),
       (folderPath) => this.cascade.getForFolder(folderPath)?.folderSchema ?? null,
     );
 
@@ -195,7 +205,11 @@ export class SchemaEngineImpl implements SchemaEngine {
   // Private helpers
   // ==========================================================================
 
-  private async lintNoteWithPreRead(notePath: string, preReadNote?: ParsedNote): Promise<LintResult> {
+  private async lintNoteWithPreRead(
+    notePath: string,
+    preReadNote?: ParsedNote,
+    vaultIndex?: VaultIndex,
+  ): Promise<LintResult> {
     if (preReadNote) {
       let schema: NoteSchema | null = null;
       if (typeof preReadNote.frontmatter.note_schema === "string") {
@@ -204,9 +218,35 @@ export class SchemaEngineImpl implements SchemaEngine {
       if (!schema) {
         schema = this.resolveNoteSchema(notePath);
       }
-      return this.noteEngine.lintNote(notePath, schema, preReadNote);
+      return this.noteEngine.lintNote(notePath, schema, preReadNote, vaultIndex);
     }
     return this.lintNote(notePath);
+  }
+
+  /**
+   * True if any registered note schema has a `noBrokenWikilinks` content rule.
+   * Used to skip the O(N) vault read when no folder/area validation needs it.
+   */
+  private schemaNeedsVaultIndex(schema: NoteSchema): boolean {
+    return schema.content.rules.some((r) => r.check === "noBrokenWikilinks");
+  }
+
+  private anyRegisteredSchemaNeedsVaultIndex(): boolean {
+    for (const info of this.registry.listAll()) {
+      if (info.type !== "note") continue;
+      const noteSchema = this.registry.getNoteSchema(info.name);
+      if (noteSchema && this.schemaNeedsVaultIndex(noteSchema)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Build a vault index once if any note schema relies on `noBrokenWikilinks`.
+   * Returns undefined when the index would be unused — saves an O(N) read pass.
+   */
+  private async maybeBuildVaultIndex(): Promise<VaultIndex | undefined> {
+    if (!this.anyRegisteredSchemaNeedsVaultIndex()) return undefined;
+    return await buildVaultIndex(this.file);
   }
 
   private isLikelyHub(notePath: string, folderSchema: FolderSchema): boolean {

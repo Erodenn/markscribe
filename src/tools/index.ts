@@ -46,6 +46,7 @@ export const LITE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "find_broken_links",
   "find_orphans",
   "find_unlinked_mentions",
+  "find_bidirectional_mentions",
   "get_backlinks",
   // Meta
   "switch_directory",

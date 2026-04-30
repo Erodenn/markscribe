@@ -182,6 +182,75 @@ function makeFindOrphansTool(container: ServiceContainer): ToolHandler {
 }
 
 // ============================================================================
+// find_bidirectional_mentions
+// ============================================================================
+
+const FindBidirectionalMentionsSchema = z.object({
+  newNotes: z.array(z.string().min(1)).min(1, "newNotes must contain at least one path"),
+  terms: z.array(z.string()).default([]),
+  scope: z.string().optional(),
+});
+
+function makeFindBidirectionalMentionsTool(container: ServiceContainer): ToolHandler {
+  return {
+    name: "find_bidirectional_mentions",
+    description:
+      "Two-direction mention sweep for batch new-note operations. Pass `{ newNotes, terms?, scope? }`. Returns `{ root, scope, existing_to_new[], new_to_existing[] }`. `existing_to_new` lists plain-text mentions of new-note titles found inside existing notes. `new_to_existing` lists plain-text mentions of free `terms` found inside the new notes. If a free term equals a new-note stem, the title classification wins.",
+    inputSchema: FindBidirectionalMentionsSchema,
+    async handler(args): Promise<ToolResponse> {
+      try {
+        const services = requireServices(container);
+        const { newNotes, terms, scope } = FindBidirectionalMentionsSchema.parse(args);
+        log.info(
+          { newNoteCount: newNotes.length, termCount: terms.length, scope },
+          "find_bidirectional_mentions called",
+        );
+        const result = await services.links.findBidirectionalMentions(newNotes, terms, scope);
+        log.info(
+          {
+            existingCount: result.existing_to_new.length,
+            newCount: result.new_to_existing.length,
+          },
+          "find_bidirectional_mentions complete",
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                root: getRoot(container),
+                scope: scope ?? null,
+                existing_to_new: result.existing_to_new,
+                new_to_existing: result.new_to_existing,
+              }),
+            },
+          ],
+        };
+      } catch (err) {
+        log.error({ err }, "find_bidirectional_mentions failed");
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                root: getRoot(container),
+                error: err instanceof Error ? err.message : String(err),
+                possibleSolutions: [
+                  "Pass at least one path in newNotes",
+                  "Each newNotes entry must be root-relative",
+                  "Omit scope to scan the entire directory",
+                ],
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  };
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -194,6 +263,7 @@ export function registerLinkTools(
     makeFindUnlinkedMentionsTool(container),
     makeFindBrokenLinksTool(container),
     makeFindOrphansTool(container),
+    makeFindBidirectionalMentionsTool(container),
   ];
 
   for (const tool of tools) {

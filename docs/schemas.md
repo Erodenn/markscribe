@@ -88,6 +88,7 @@ Each rule runs against the note's markdown body.
 | `noPattern` | `pattern` | Rule passes if the regex does not match |
 | `noSelfWikilink` | — | Rule passes if the note does not `[[link]]` to itself |
 | `noMalformedWikilinks` | — | Rule passes if no unbalanced `[[` / `]]` are present |
+| `noBrokenWikilinks` | — | Rule passes if every `[[target]]` resolves to an existing note (by stem or alias) |
 | `minWordCount` | `count` | Rule passes if the body has at least `count` words |
 
 Every rule needs a `name` — it appears in `lint_note` output so failures are identifiable.

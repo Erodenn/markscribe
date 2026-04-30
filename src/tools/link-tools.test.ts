@@ -59,7 +59,7 @@ describe("registerLinkTools", () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("registers all four link tools", () => {
+  it("registers all five link tools", () => {
     const services = makeServices(tmpDir);
     const registry = makeRegistry(services);
 
@@ -67,6 +67,7 @@ describe("registerLinkTools", () => {
     expect(registry.has("find_unlinked_mentions")).toBe(true);
     expect(registry.has("find_broken_links")).toBe(true);
     expect(registry.has("find_orphans")).toBe(true);
+    expect(registry.has("find_bidirectional_mentions")).toBe(true);
   });
 
   it("each tool has name, description, inputSchema, and handler", () => {
@@ -381,6 +382,62 @@ describe("find_orphans tool", () => {
 
   it("includes scope: null in response when no scope provided", async () => {
     const { text } = await callTool(registry, "find_orphans", {});
+    const parsed = JSON.parse(text) as { scope: unknown };
+    expect(parsed.scope).toBeNull();
+  });
+});
+
+// ============================================================================
+// find_bidirectional_mentions
+// ============================================================================
+
+describe("find_bidirectional_mentions tool", () => {
+  let tmpDir: string;
+  let registry: Map<string, ToolHandler>;
+
+  beforeEach(async () => {
+    tmpDir = await makeTempDir("markscribe-link-tools-test-");
+    registry = makeRegistry(makeServices(tmpDir));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns both directions in a single call", async () => {
+    await writeFile(tmpDir, "Existing.md", "I read NewNote yesterday.");
+    await writeFile(tmpDir, "NewNote.md", "Reference to Existing here.");
+
+    const { text, isError } = await callTool(registry, "find_bidirectional_mentions", {
+      newNotes: ["NewNote.md"],
+      terms: ["Existing"],
+    });
+    expect(isError).toBeFalsy();
+    const parsed = JSON.parse(text) as {
+      existing_to_new: Array<{ note: string; newTarget: string; term: string }>;
+      new_to_existing: Array<{ note: string; target: string }>;
+    };
+    expect(parsed.existing_to_new).toHaveLength(1);
+    expect(parsed.existing_to_new[0].note).toBe("Existing.md");
+    expect(parsed.existing_to_new[0].newTarget).toBe("NewNote.md");
+    expect(parsed.new_to_existing).toHaveLength(1);
+    expect(parsed.new_to_existing[0].note).toBe("NewNote.md");
+    expect(parsed.new_to_existing[0].target).toBe("Existing");
+  });
+
+  it("rejects empty newNotes via Zod min(1)", async () => {
+    const { isError } = await callTool(registry, "find_bidirectional_mentions", {
+      newNotes: [],
+      terms: ["Anything"],
+    });
+    expect(isError).toBe(true);
+  });
+
+  it("echoes scope: null when omitted", async () => {
+    await writeFile(tmpDir, "NewNote.md", "Body.");
+    const { text } = await callTool(registry, "find_bidirectional_mentions", {
+      newNotes: ["NewNote.md"],
+    });
     const parsed = JSON.parse(text) as { scope: unknown };
     expect(parsed.scope).toBeNull();
   });

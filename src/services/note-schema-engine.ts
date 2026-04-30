@@ -11,7 +11,14 @@ import type {
   ParsedNote,
 } from "../types.js";
 import { createChildLog } from "../markscribe-log.js";
-import { escapeRegex, expandTemplateVars, buildTemplateContext, evalCondition } from "../utils.js";
+import {
+  escapeRegex,
+  expandTemplateVars,
+  buildTemplateContext,
+  evalCondition,
+  scanWikilinks,
+} from "../utils.js";
+import type { VaultIndex } from "./vault-index.js";
 
 const log = createChildLog({ service: "NoteSchemaEngine" });
 
@@ -33,6 +40,7 @@ export class NoteSchemaEngineImpl {
     notePath: string,
     schema: NoteSchema | null,
     preReadNote?: ParsedNote,
+    vaultIndex?: VaultIndex,
   ): Promise<LintResult> {
     log.info({ path: notePath, schema: schema?.name ?? null }, "lintNote start");
 
@@ -54,7 +62,7 @@ export class NoteSchemaEngineImpl {
 
     // Content rule checks
     for (const rule of schema.content.rules) {
-      checks.push(this.checkContentRule(rule, content, ctx));
+      checks.push(await this.checkContentRule(rule, content, ctx, vaultIndex));
     }
 
     const pass = checks.every((c) => c.pass);
@@ -288,7 +296,12 @@ export class NoteSchemaEngineImpl {
     return null;
   }
 
-  private checkContentRule(rule: ContentRule, content: string, ctx: TemplateContext): Check {
+  private async checkContentRule(
+    rule: ContentRule,
+    content: string,
+    ctx: TemplateContext,
+    vaultIndex?: VaultIndex,
+  ): Promise<Check> {
     switch (rule.check) {
       case "hasPattern": {
         const re = this.getCachedRegex(rule.pattern ?? "");
@@ -344,6 +357,36 @@ export class NoteSchemaEngineImpl {
         }
 
         return { name: rule.name, pass: true, detail: "" };
+      }
+
+      case "noBrokenWikilinks": {
+        if (!vaultIndex) {
+          // Defensive: schema engine should always pass an index when this
+          // rule is in play. If absent, do not block — surface the gap.
+          return {
+            name: rule.name,
+            pass: true,
+            detail: "noBrokenWikilinks skipped: vault index unavailable",
+          };
+        }
+
+        const broken: string[] = [];
+        for (const scanned of scanWikilinks(content)) {
+          if (!vaultIndex.resolve(scanned.target)) {
+            broken.push(scanned.target);
+          }
+        }
+
+        if (broken.length === 0) {
+          return { name: rule.name, pass: true, detail: "" };
+        }
+
+        const formatted = broken.map((t) => `[[${t}]]`).join(", ");
+        return {
+          name: rule.name,
+          pass: false,
+          detail: `Broken wikilinks: ${formatted}`,
+        };
       }
 
       case "minWordCount": {

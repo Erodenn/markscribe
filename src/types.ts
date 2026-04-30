@@ -331,7 +331,13 @@ export interface ContentRule {
   /** User-chosen name, appears in lint results */
   name: string;
   /** Built-in check identifier */
-  check: "hasPattern" | "noPattern" | "noSelfWikilink" | "noMalformedWikilinks" | "minWordCount";
+  check:
+    | "hasPattern"
+    | "noPattern"
+    | "noSelfWikilink"
+    | "noMalformedWikilinks"
+    | "noBrokenWikilinks"
+    | "minWordCount";
   /** Pattern for hasPattern/noPattern */
   pattern?: string;
   /** Count for minWordCount */
@@ -638,6 +644,51 @@ export interface BrokenLink {
   line: number;
 }
 
+/**
+ * A plain-text mention found in an existing vault note that matches the title
+ * of one of the new notes being added in a batch operation.
+ */
+export interface MentionToNew {
+  /** Path of the existing note containing the mention */
+  note: string;
+  /** Path of the new note whose title was matched */
+  newTarget: string;
+  /** Matched text (preserves the original casing in the source) */
+  term: string;
+  /** Line number (1-based) */
+  line: number;
+  /** Character offset within the line (0-based) */
+  column: number;
+  /** The full line where the match occurred */
+  context: string;
+}
+
+/**
+ * A plain-text mention found inside one of the new notes that matches a free
+ * search term — typically the title of a note that already exists in the vault.
+ */
+export interface MentionToExisting {
+  /** Path of the new note containing the mention */
+  note: string;
+  /** The free term that was matched */
+  term: string;
+  /** The free term that was matched (kept as-is for caller's display) */
+  target: string;
+  /** Line number (1-based) */
+  line: number;
+  /** Character offset within the line (0-based) */
+  column: number;
+  /** The full line where the match occurred */
+  context: string;
+}
+
+export interface BidirectionalMentions {
+  /** Mentions of new-note titles found in existing notes */
+  existing_to_new: MentionToNew[];
+  /** Mentions of free terms found inside the new notes */
+  new_to_existing: MentionToExisting[];
+}
+
 export interface RenameResult {
   /** Number of files updated */
   filesUpdated: number;
@@ -663,6 +714,22 @@ export interface LinkEngine {
 
   /** Find plain-text references that should be wikilinks */
   findUnlinkedMentions(notePath: string): Promise<UnlinkedMention[]>;
+
+  /**
+   * Two-direction mention sweep used when batch-writing new notes.
+   * - `existing_to_new`: plain-text mentions of new-note titles inside
+   *   existing vault notes.
+   * - `new_to_existing`: plain-text mentions of free terms inside the new
+   *   notes themselves.
+   *
+   * If a free term equals the stem of one of the new notes, the new-note
+   * classification wins (term is treated as a title, not a free term).
+   */
+  findBidirectionalMentions(
+    newNotes: string[],
+    terms: string[],
+    scope?: string,
+  ): Promise<BidirectionalMentions>;
 
   /** Find wikilinks pointing to non-existent notes */
   findBrokenLinks(scope?: string): Promise<BrokenLink[]>;
